@@ -112,5 +112,16 @@ export function routes(config: Config) {
         res.end()
     })
 
+    router.post('/api/product/sendPushMessage', (req, res) => {
+        // Not yet decoded — this is the device's own push-notification channel
+        // (messageCode/langCode), the likely source of "cycle complete"/error events that
+        // don't fit into the periodic Mon/Start status. Previously unhandled entirely (fell
+        // through to the generic {} JSON fallback instead of a real XML ack). Log the body
+        // so a real notification can be captured and turned into an HA event.
+        log('HTTPS', `sendPushMessage ${req.header('x-lgedm-deviceid')}: ${JSON.stringify(req.body)}`)
+        res.header('Content-type: text/xml;charset=utf-8')
+        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
+    })
+
     return router
 }
