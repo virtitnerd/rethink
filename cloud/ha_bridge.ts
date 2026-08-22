@@ -22,6 +22,7 @@ import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
 import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
+import F3L2CNV4W_WIFI from './devices/F3L2CNV4W_WIFI'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -34,6 +35,7 @@ type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HA
 
 const t1deviceTypes: Record<string, T1Factory> = {
     WTDN3,
+    F3L2CNV4W_WIFI, // LG F3L2CNV4W front-load washer — decode from LG's own modelJson, cycle-start not yet implemented
 }
 
 const t2deviceTypes: Record<string, T2Factory> = {
