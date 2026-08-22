@@ -387,6 +387,11 @@ export default class Device extends HADevice {
             }),
         )
 
+        // The washer reports APCourse=0 while idle/no course actively dialed — that's not
+        // in COURSE_DEFAULTS, so the sync-on-data logic below never fires for it. Publish
+        // our own default up front so the select entity doesn't sit at "unknown" forever.
+        this.publishProperty('course_selection', AP_COURSE[this.pendingCourseId])
+
         thinq.on('data', (buf) => {
             if (buf.length < 24) return
 

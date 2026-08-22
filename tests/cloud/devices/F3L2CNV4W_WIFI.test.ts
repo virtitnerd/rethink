@@ -91,6 +91,17 @@ describe(MODEL_ID, () => {
         ])
     })
 
+    test('course_selection defaults to Normal on construction, before any data arrives', () => {
+        const { ha } = makeDevice()
+        assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal')
+    })
+
+    test('course_selection stays at its default while idle (APCourse=0 is not a real course)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_OFF) // APCourse byte is 0
+        assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal')
+    })
+
     test('OFF state publishes power=OFF and idle defaults', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_STATE_OFF)
@@ -146,7 +157,9 @@ describe(MODEL_ID, () => {
     test('Frames shorter than the 24-byte layout are ignored', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', buf('AABBCC'))
-        assert.deepEqual(ha.devices[DEVICE_ID].properties, {})
+        // course_selection is published at construction time, independent of any frame;
+        // nothing else should appear from a too-short frame.
+        assert.deepEqual(ha.devices[DEVICE_ID].properties, { course_selection: 'Normal' })
     })
 
     test('HA write power=OFF sends the modelJson PowerOff envelope', () => {
