@@ -378,6 +378,10 @@ export default class Device extends HADevice {
         })
     }
 
+    start() {
+        this.thinq.send({ Cmd: 'Mon', CmdOpt: 'Start' })
+    }
+
     publishCache: Record<string, string | number> = {}
 
     publishProperty(prop: string, value: string | number) {

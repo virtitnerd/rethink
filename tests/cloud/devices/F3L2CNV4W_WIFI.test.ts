@@ -156,6 +156,13 @@ describe(MODEL_ID, () => {
         assert.deepEqual(thinq.sent, [{ Cmd: 'Control', CmdOpt: 'Operation', Value: 'Stop', Format: 'B64', Data: '' }])
     })
 
+    test('start() sends a Mon/Start subscription on the wire', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.start()
+        assert.deepEqual(thinq.sent, [{ Cmd: 'Mon', CmdOpt: 'Start' }])
+    })
+
     // No test for starting a cycle (OperationStart) — not implemented yet, see the class
     // header comment: the course-parameter array encoding isn't confirmed against a real
     // captured command.
