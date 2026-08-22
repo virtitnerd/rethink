@@ -54,6 +54,8 @@ describe(MODEL_ID, () => {
             'error',
             'error_message',
             'course',
+            'op_course',
+            'smart_course',
             'soil',
             'spin',
             'temp',
@@ -64,10 +66,12 @@ describe(MODEL_ID, () => {
             'steam',
             'prewash',
             'turbowash',
+            'extra_rinse',
             'coldwash',
             'fresh_care',
             'remote_start',
             'tub_clean_count',
+            'load_level',
             'reserve_time',
             'initial_time',
             'remaining_time',
@@ -142,6 +146,10 @@ describe(MODEL_ID, () => {
         assert.equal(props.initial_time, 70)
         assert.equal(props.remaining_time, 65)
         assert.equal(props.error, 'OFF')
+        assert.equal(props.op_course, 'Normal')
+        assert.equal(props.smart_course, '0')
+        assert.equal(props.extra_rinse, 'OFF')
+        assert.equal(props.load_level, 0)
     })
 
     test('Door-open error publishes error binary + descriptive message', () => {
@@ -200,10 +208,11 @@ describe(MODEL_ID, () => {
         assert.equal(sent.CmdOpt, 'Operation')
         assert.equal(sent.Value, 'Start')
         assert.equal(sent.Format, 'B64')
-        // Normal (id 5): Soil=3, SpinSpeed=5, WaterTemp=4, OPCourse=6 — from modelJson
+        // Matches a real captured OperationStart command for the Normal course (2026-08-22),
+        // Data: "BQMFBAAAAAAAIAYAAAAAAAAAAAAA" — byte-for-byte, not just the modelJson-derived guess.
         assert.deepEqual(
             [...Buffer.from(sent.Data, 'base64')],
-            [5, 3, 5, 4, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [5, 3, 5, 4, 0, 0, 0, 0, 0, 0x20, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         )
     })
 
@@ -225,7 +234,7 @@ describe(MODEL_ID, () => {
         // Heavy Duty (id 4): Soil=5, SpinSpeed=5, WaterTemp=4, OPCourse=7
         assert.deepEqual(
             [...Buffer.from(sent.Data, 'base64')],
-            [4, 5, 5, 4, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [4, 5, 5, 4, 0, 0, 0, 0, 0, 0x20, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         )
     })
 

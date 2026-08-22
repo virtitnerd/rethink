@@ -148,21 +148,76 @@ const COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTe
 
 const DEFAULT_COURSE_ID = 5 // Normal
 
+// OPCourse (byte 22): the machine's internal course code, which AP_COURSE's dial position
+// maps onto (Normal -> OPCourse 6, etc. — see COURSE_DEFAULTS). Published separately as a
+// diagnostic since it's a richer catalog than AP_COURSE (includes codes no physical dial
+// position selects directly, e.g. Small Load, Rugged, Sportswear).
+const OP_COURSE: Record<number, string> = {
+    0: '-',
+    1: 'Refresh',
+    2: 'Sanitary',
+    3: 'Allergiene',
+    4: 'Bedding',
+    5: 'Perm Press',
+    6: 'Normal',
+    7: 'Heavy Duty',
+    8: 'Bright Whites',
+    9: 'Cold Care',
+    10: 'Delicates',
+    11: 'Hand Wash',
+    12: 'Speed Wash',
+    13: 'Tub Clean',
+    14: 'Towels',
+    15: 'Small Load',
+    16: 'Rinse+Spin',
+    17: 'Rugged',
+    18: 'KidsWears',
+    19: 'WorkOut Wear',
+    20: 'Drain+Spin',
+    21: 'Sportswear',
+    22: 'Jumbo Wash',
+}
+
+// SmartCourse (byte 20): a course downloaded from the app's "smart course" picker, distinct
+// from AP_COURSE's physical-dial courses. modelJson's SmartCourse table has ~90 entries;
+// only the ones actually reachable are worth naming here — ids outside this table (or 0,
+// meaning none downloaded) fall back to their raw number.
+const SMART_COURSE: Record<number, string> = {
+    51: 'Small Load',
+    52: 'Color Care',
+    53: 'Beachwear',
+    54: 'New Clothes',
+    55: 'Denim',
+    59: 'Swimwear',
+    60: 'Rainy Day',
+    61: 'Gym Clothes',
+    63: 'Sweat Stains',
+    64: 'Single Garments',
+    100: 'Baby Clothes',
+    105: 'Overnight Wash',
+    106: 'Econo Wash',
+    107: 'Delicate Dresses',
+    108: 'Half Load Wash',
+    109: 'Full Load Wash',
+}
+
 // modelJson ControlWifi.action.OperationStart.data, positionally:
 //   [APCourse, Soil, SpinSpeed, WaterTemp, RinseOption, Reserve_Time_H, Reserve_Time_M,
 //    Option1, Option2, Option3, OPCourse, SmartCourse, 0,0,0,0,0,0,0,0,0]
-// Encoding (each element = one raw byte, base64 of the resulting buffer) matches
-// ha-smartthinq-sensors' confirmed ThinQ1 v1 command builder — an independent, real-world
-// implementation already driving this exact model — cross-checked against the modelJson
-// template itself. Only the course-varying fields (Soil/SpinSpeed/WaterTemp/OPCourse) are
-// populated from COURSE_DEFAULTS; every other slot modelJson shows as 0 across all courses.
+// CONFIRMED against a real captured command (Normal course, 2026-08-22): courseId, Soil,
+// SpinSpeed, WaterTemp, RinseOption, Reserve_Time_H/M, Option1, Option2, OPCourse,
+// SmartCourse and all 9 trailing bytes matched this encoding exactly. The one gap this
+// capture caught: Option3 needs bit 5 (0x20) set — modelJson's "InitialBit" — which a
+// bare 0 does not produce; without it the machine never actually started.
 function encodeCourseStart(courseId: number): string | undefined {
     const d = COURSE_DEFAULTS[courseId]
     if (!d) return undefined
 
+    const INITIAL_BIT = 0x20 // Option3 bit 5
+
     // prettier-ignore
     const bytes = [
-        courseId, d.soil, d.spinSpeed, d.waterTemp, 0, 0, 0, 0, 0, 0, d.opCourse, 0,
+        courseId, d.soil, d.spinSpeed, d.waterTemp, 0, 0, 0, 0, 0, INITIAL_BIT, d.opCourse, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0,
     ]
     return Buffer.from(bytes).toString('base64')
@@ -257,6 +312,22 @@ export default class Device extends HADevice {
                         name: 'Course',
                         icon: 'mdi:pin-outline',
                     },
+                    op_course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-op-course',
+                        state_topic: '$this/op_course',
+                        name: 'Internal course code',
+                        icon: 'mdi:cog-outline',
+                        entity_category: 'diagnostic',
+                    },
+                    smart_course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-smart-course',
+                        state_topic: '$this/smart_course',
+                        name: 'Downloaded course',
+                        icon: 'mdi:cloud-download-outline',
+                        entity_category: 'diagnostic',
+                    },
                     soil: {
                         platform: 'sensor',
                         unique_id: '$deviceid-soil',
@@ -330,6 +401,13 @@ export default class Device extends HADevice {
                         name: 'TurboWash',
                         icon: 'mdi:speedometer',
                     },
+                    extra_rinse: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-extra-rinse',
+                        state_topic: '$this/extra_rinse',
+                        name: 'Extra rinse',
+                        icon: 'mdi:water-plus-outline',
+                    },
                     coldwash: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-coldwash',
@@ -357,6 +435,14 @@ export default class Device extends HADevice {
                         state_topic: '$this/tub_clean_count',
                         name: 'Cycles since tub clean',
                         icon: 'mdi:counter',
+                        entity_category: 'diagnostic',
+                    },
+                    load_level: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-load-level',
+                        state_topic: '$this/load_level',
+                        name: 'Load level (raw)',
+                        icon: 'mdi:scale-bathroom',
                         entity_category: 'diagnostic',
                     },
                     reserve_time: {
@@ -410,7 +496,10 @@ export default class Device extends HADevice {
             const option1 = buf[14]
             const option2 = buf[15]
             const preState = buf[19]
+            const smartCourse = buf[20]
             const tclCount = buf[21]
+            const opCourse = buf[22]
+            const loadLevel = buf[23]
 
             const rinseCount = rinseOption & 0x0f
             const extraRinseCount = (rinseOption >> 4) & 0x0f
@@ -421,6 +510,8 @@ export default class Device extends HADevice {
             this.publishProperty('status', STATES[state] ?? 'unknown')
             this.publishProperty('pre_state', STATES[preState] ?? 'unknown')
             this.publishProperty('course', AP_COURSE[apCourse] ?? String(apCourse))
+            this.publishProperty('op_course', OP_COURSE[opCourse] ?? String(opCourse))
+            this.publishProperty('smart_course', SMART_COURSE[smartCourse] ?? String(smartCourse))
             this.publishProperty('soil', SOIL[soil] ?? 'unknown')
             this.publishProperty('spin', SPIN[spin] ?? 'unknown')
             this.publishProperty('temp', TEMP[temp] ?? 'unknown')
@@ -431,10 +522,12 @@ export default class Device extends HADevice {
             this.publishProperty('steam', option1 & 0x04 ? 'ON' : 'OFF')
             this.publishProperty('prewash', option1 & 0x08 ? 'ON' : 'OFF')
             this.publishProperty('turbowash', option1 & 0x80 ? 'ON' : 'OFF')
+            this.publishProperty('extra_rinse', option1 & 0x40 ? 'ON' : 'OFF')
             this.publishProperty('fresh_care', option2 & 0x01 ? 'ON' : 'OFF')
             this.publishProperty('coldwash', option2 & 0x10 ? 'ON' : 'OFF')
             this.publishProperty('remote_start', option2 & 0x80 ? 'ON' : 'OFF')
             this.publishProperty('tub_clean_count', tclCount)
+            this.publishProperty('load_level', loadLevel)
             this.publishProperty('reserve_time', reserveH * 60 + reserveM)
             this.publishProperty('initial_time', timeInitial)
             this.publishProperty('remaining_time', timeRemain)
