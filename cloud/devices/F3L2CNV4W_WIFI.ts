@@ -255,6 +255,7 @@ export default class Device extends HADevice {
                         unique_id: '$deviceid-course-selection',
                         state_topic: '$this/course_selection',
                         command_topic: '$this/course_selection/set',
+                        availability_topic: '$this/controls_available',
                         name: 'Course selection',
                         icon: 'mdi:tune-vertical-variant',
                         options: Object.keys(COURSE_DEFAULTS).map((id) => AP_COURSE[Number(id)]),
@@ -263,6 +264,7 @@ export default class Device extends HADevice {
                         platform: 'button',
                         unique_id: '$deviceid-remote-start-button',
                         command_topic: '$this/remote_start_button/set',
+                        availability_topic: '$this/controls_available',
                         payload_press: '',
                         name: 'Remote Start',
                         icon: 'mdi:play-circle-outline',
@@ -508,6 +510,10 @@ export default class Device extends HADevice {
             this.publishProperty('error_message', ERRORS[error] ?? 'unknown')
             this.publishProperty('error', error ? 'ON' : 'OFF')
             this.publishProperty('status', STATES[state] ?? 'unknown')
+            // Course selection / Remote Start only make sense when the machine is actually
+            // idle — mid-cycle they'd let you fire a second OperationStart the machine has
+            // no defined behavior for. Off/Initial are the only states nothing is running.
+            this.publishProperty('controls_available', state === 0 || state === 5 ? 'online' : 'offline')
             this.publishProperty('pre_state', STATES[preState] ?? 'unknown')
             this.publishProperty('course', AP_COURSE[apCourse] ?? String(apCourse))
             this.publishProperty('op_course', OP_COURSE[opCourse] ?? String(opCourse))

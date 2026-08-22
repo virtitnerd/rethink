@@ -106,6 +106,18 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal')
     })
 
+    test('course_selection/remote_start_button availability tracks Off/Initial vs a running cycle', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_OFF) // State=Off
+        assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'online')
+
+        thinq.emit('data', SAMPLE_STATE_RUNNING_NORMAL) // State=Running
+        assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'offline')
+
+        thinq.emit('data', SAMPLE_STATE_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'online')
+    })
+
     test('OFF state publishes power=OFF and idle defaults', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_STATE_OFF)
