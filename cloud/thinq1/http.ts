@@ -2,6 +2,7 @@ import { Request, Response, Router } from 'express'
 import { Config } from '@/util/config'
 import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser'
 import { Metadata } from '../thinq'
+import log from '@/util/logging'
 
 const XML_HEADER = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
 
@@ -103,6 +104,11 @@ export function routes(config: Config) {
     })
 
     router.post('/lgehadm/report/diagmon', (req, res) => {
+        // Not yet decoded — this is where per-cycle energy/water usage reports arrive
+        // (WasherMonitoring diagMonType, separate from the periodic Mon/Start status
+        // channel). Log the raw parsed body so a real report can be captured and a proper
+        // decoder written from it, the same way the rest of this device's fields were.
+        log('HTTPS', `diagmon ${req.header('x-lgedm-deviceid')}: ${JSON.stringify(req.body)}`)
         res.end()
     })
 
