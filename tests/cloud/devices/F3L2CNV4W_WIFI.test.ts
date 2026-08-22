@@ -47,6 +47,8 @@ describe(MODEL_ID, () => {
         for (const c of [
             'power',
             'pause',
+            'course_selection',
+            'remote_start_button',
             'status',
             'pre_state',
             'error',
@@ -75,6 +77,18 @@ describe(MODEL_ID, () => {
         assert.ok(Array.isArray(components.status.options))
         assert.ok((components.status.options as string[]).includes('Running'))
         assert.ok((components.status.options as string[]).includes('Error auto-off'))
+
+        assert.deepEqual(components.course_selection.options, [
+            'Tub Clean',
+            'Bright Whites',
+            'Bedding',
+            'Heavy Duty',
+            'Normal',
+            'Perm Press',
+            'Delicates',
+            'Towels',
+            'Speed Wash',
+        ])
     })
 
     test('OFF state publishes power=OFF and idle defaults', () => {
@@ -163,7 +177,46 @@ describe(MODEL_ID, () => {
         assert.deepEqual(thinq.sent, [{ Cmd: 'Mon', CmdOpt: 'Start' }])
     })
 
-    // No test for starting a cycle (OperationStart) — not implemented yet, see the class
-    // header comment: the course-parameter array encoding isn't confirmed against a real
-    // captured command.
+    test('remote_start_button sends OperationStart with the default (Normal) course', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('remote_start_button', '')
+        assert.equal(thinq.sent.length, 1)
+        const sent = thinq.sent[0] as { Cmd: string; CmdOpt: string; Value: string; Format: string; Data: string }
+        assert.equal(sent.Cmd, 'Control')
+        assert.equal(sent.CmdOpt, 'Operation')
+        assert.equal(sent.Value, 'Start')
+        assert.equal(sent.Format, 'B64')
+        // Normal (id 5): Soil=3, SpinSpeed=5, WaterTemp=4, OPCourse=6 — from modelJson
+        assert.deepEqual(
+            [...Buffer.from(sent.Data, 'base64')],
+            [5, 3, 5, 4, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+    })
+
+    test('course_selection tracks the live course until the user picks one', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_RUNNING_NORMAL) // course id 5 -> Normal
+        assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal')
+
+        dev.setProperty('course_selection', 'Heavy Duty')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Heavy Duty')
+
+        // a later frame still reporting the Normal course shouldn't override the user's pick
+        thinq.emit('data', SAMPLE_STATE_RUNNING_NORMAL)
+        assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Heavy Duty')
+
+        thinq.resetRecorder()
+        dev.setProperty('remote_start_button', '')
+        const sent = thinq.sent[0] as { Data: string }
+        // Heavy Duty (id 4): Soil=5, SpinSpeed=5, WaterTemp=4, OPCourse=7
+        assert.deepEqual(
+            [...Buffer.from(sent.Data, 'base64')],
+            [4, 5, 5, 4, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+    })
+
+    // OperationStart's encoding is cross-confirmed against ha-smartthinq-sensors' independent
+    // ThinQ1 command builder (see the class header comment), but not yet against a real
+    // captured command from this device.
 })
