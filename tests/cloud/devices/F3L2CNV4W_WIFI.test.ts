@@ -134,6 +134,16 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal')
     })
 
+    test('controls_available defaults to offline on construction, before any data arrives', () => {
+        // Regression test: this was previously only ever published reactively inside the
+        // data handler, so a process that hadn't yet seen a fresh frame (e.g. right after a
+        // restart, before the washer reconnects) left HA showing a stale value retained from
+        // whatever a PREVIOUS process last published - stuck indefinitely if that was
+        // "offline" (e.g. the washer was mid-cycle when that earlier process stopped).
+        const { ha } = makeDevice()
+        assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'offline')
+    })
+
     test('course_selection/remote_start_button availability tracks Off/Initial vs a running cycle', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_STATE_OFF) // State=Off
@@ -222,9 +232,12 @@ describe(MODEL_ID, () => {
     test('Frames shorter than the 24-byte layout are ignored', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', buf('AABBCC'))
-        // course_selection is published at construction time, independent of any frame;
-        // nothing else should appear from a too-short frame.
-        assert.deepEqual(ha.devices[DEVICE_ID].properties, { course_selection: 'Normal' })
+        // course_selection and controls_available are both published at construction time,
+        // independent of any frame; nothing else should appear from a too-short frame.
+        assert.deepEqual(ha.devices[DEVICE_ID].properties, {
+            course_selection: 'Normal',
+            controls_available: 'offline',
+        })
     })
 
     test('HA write power=OFF sends the modelJson PowerOff envelope', () => {

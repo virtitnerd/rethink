@@ -595,6 +595,17 @@ export default class Device extends HADevice {
         // our own default up front so the select entity doesn't sit at "unknown" forever.
         this.publishProperty('course_selection', SELECTABLE_COURSE_NAMES[this.pendingCourseId])
 
+        // Same class of bug as course_selection above, and it's the one that actually bit us:
+        // controls_available was ONLY ever published reactively, inside thinq.on('data', ...)
+        // below. If this process's lifetime hasn't seen a fresh frame yet (e.g. the washer
+        // hasn't reconnected since a restart), that topic had never been republished, so HA
+        // was just showing whatever was last retained from a PREVIOUS process — stuck
+        // "offline" indefinitely if that process's last frame happened to be mid-cycle.
+        // Publish a real default immediately so a fresh process is never silently stuck on a
+        // stale prior-process value; the data handler corrects it the moment a real frame
+        // arrives.
+        this.publishProperty('controls_available', 'offline')
+
         thinq.on('data', (buf) => {
             if (buf.length < 24) return
 
