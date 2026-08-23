@@ -108,6 +108,18 @@ export function routes(config: Config, onDiagmon?: (deviceId: string, diagMonTyp
         res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: response }))
     })
 
+    router.post('/lgehadm/api/Rtos/ContentsVerSvc', (req, res) => {
+        // Not yet decoded — previously unhandled entirely (fell through to the generic {}
+        // fallback). Called on every single connect, before anything else, which suggests a
+        // "what course-catalog content version do you have" handshake - worth capturing on
+        // its own since a wrong/missing answer here could be poisoning the SmartCourse
+        // download flow before WasherCourseDownloadSvc is ever reached. Log the request body
+        // (whatever version info it sends) so we can figure out what a real answer looks like.
+        log('HTTPS', `ContentsVerSvc ${req.header('x-lgedm-deviceid')}: ${JSON.stringify(req.body)}`)
+        res.header('Content-type: text/xml;charset=utf-8')
+        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
+    })
+
     router.post('/lgehadm/api/Grid/PowerSavingInfoSvc', (req, res) => {
         res.header('Content-type: text/xml;charset=utf-8')
         res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0108', returnMsg: 'No Saving Data.' } }))
