@@ -333,7 +333,13 @@ export default class Device extends HADevice {
                         platform: 'button',
                         unique_id: '$deviceid-remote-start-button',
                         command_topic: '$this/remote_start_button/set',
-                        availability: [{ topic: '$this/controls_available' }],
+                        // Separate from course_selection's controls_available: OperationStart is
+                        // also how you resume a paused cycle (modelJson has no distinct Resume
+                        // action - Off/Initial/Paused all send the same Start command), so this
+                        // button needs to stay available through Paused too. course_selection
+                        // does not: we have no evidence for what the machine does if you swap
+                        // courses while paused and hit Start, so it stays locked to Off/Initial.
+                        availability: [{ topic: '$this/remote_start_available' }],
                         payload_press: '',
                         name: 'Remote Start',
                         icon: 'mdi:play-circle-outline',
@@ -609,6 +615,7 @@ export default class Device extends HADevice {
         // stale prior-process value; the data handler corrects it the moment a real frame
         // arrives.
         this.publishProperty('controls_available', 'offline')
+        this.publishProperty('remote_start_available', 'offline')
 
         thinq.on('data', (buf) => {
             if (buf.length < 24) return
@@ -641,10 +648,18 @@ export default class Device extends HADevice {
             this.publishProperty('error_message', ERRORS[error] ?? String(error))
             this.publishProperty('error', error ? 'ON' : 'OFF')
             this.publishProperty('status', STATES[state] ?? String(state))
-            // Course selection / Remote Start only make sense when the machine is actually
-            // idle — mid-cycle they'd let you fire a second OperationStart the machine has
-            // no defined behavior for. Off/Initial are the only states nothing is running.
+            // Course selection only makes sense when the machine is actually idle — mid-cycle
+            // it'd let you fire an OperationStart with different course params than what's
+            // running, which we have no evidence is safe. Off/Initial are the only states
+            // nothing is running.
             this.publishProperty('controls_available', state === 0 || state === 5 ? 'online' : 'offline')
+            // Remote Start also needs to stay available while Paused: modelJson has no distinct
+            // Resume action, OperationStart is how you resume a paused cycle too (same as
+            // pressing Start on the physical panel while paused).
+            this.publishProperty(
+                'remote_start_available',
+                state === 0 || state === 5 || state === 6 ? 'online' : 'offline',
+            )
             this.publishProperty('pre_state', STATES[preState] ?? String(preState))
             this.publishProperty('course', AP_COURSE[apCourse] ?? String(apCourse))
             this.publishProperty('op_course', OP_COURSE[opCourse] ?? String(opCourse))

@@ -135,8 +135,9 @@ describe(MODEL_ID, () => {
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         for (const c of ['course_selection', 'remote_start_button']) {
             assert.equal(components[c].availability_topic, undefined, `${c} must not use availability_topic`)
-            assert.deepEqual(components[c].availability, [{ topic: '$this/controls_available' }])
         }
+        assert.deepEqual(components.course_selection.availability, [{ topic: '$this/controls_available' }])
+        assert.deepEqual(components.remote_start_button.availability, [{ topic: '$this/remote_start_available' }])
     })
 
     test('course_selection defaults to Normal on construction, before any data arrives', () => {
@@ -158,9 +159,10 @@ describe(MODEL_ID, () => {
         // "offline" (e.g. the washer was mid-cycle when that earlier process stopped).
         const { ha } = makeDevice()
         assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'offline')
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'offline')
     })
 
-    test('course_selection/remote_start_button availability tracks Off/Initial vs a running cycle', () => {
+    test('course_selection availability tracks Off/Initial vs a running cycle', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_STATE_OFF) // State=Off
         assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'online')
@@ -170,6 +172,22 @@ describe(MODEL_ID, () => {
 
         thinq.emit('data', SAMPLE_STATE_OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'online')
+    })
+
+    test('remote_start_button stays available through Paused too, unlike course_selection', () => {
+        // modelJson has no distinct Resume action - OperationStart is how you resume a paused
+        // cycle. course_selection has no such exception: we have no evidence it's safe to swap
+        // courses mid-pause, so it stays locked to Off/Initial only.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_OFF) // State=Off
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'online')
+
+        thinq.emit('data', SAMPLE_STATE_RUNNING_NORMAL) // State=Running
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'offline')
+
+        thinq.emit('data', buf('06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00')) // State=Paused
+        assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'offline')
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'online')
     })
 
     test('OFF state publishes power=OFF and idle defaults', () => {
@@ -248,11 +266,13 @@ describe(MODEL_ID, () => {
     test('Frames shorter than the 24-byte layout are ignored', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', buf('AABBCC'))
-        // course_selection and controls_available are both published at construction time,
-        // independent of any frame; nothing else should appear from a too-short frame.
+        // course_selection, controls_available, and remote_start_available are all published
+        // at construction time, independent of any frame; nothing else should appear from a
+        // too-short frame.
         assert.deepEqual(ha.devices[DEVICE_ID].properties, {
             course_selection: 'Normal',
             controls_available: 'offline',
+            remote_start_available: 'offline',
         })
     })
 
