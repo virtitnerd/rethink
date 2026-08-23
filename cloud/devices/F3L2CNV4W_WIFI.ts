@@ -27,11 +27,15 @@ import { Metadata } from '../thinq'
 // entirely: HTTP diagmon reports (cloud/thinq1/http.ts), not the persistent :47878 status
 // socket this class otherwise reads from. See the thinq.on('diagmon', ...) handler below.
 //
-// course_selection also offers the 16 app-downloadable SMART_COURSE_DEFAULTS entries
-// alongside the 9 physical-dial ones — same OperationStart command, same confirmed encoding,
-// just APCourse fixed at DOWNLOAD_COURSE_AP_ID with the real SmartCourse id populated instead
-// of 0. Every SmartCourse entry has controlEnable/downloadEnable:true in the modelJson, but
-// this path itself isn't yet confirmed against a real captured SmartCourse start.
+// course_selection only offers the 9 physical-dial AP courses, not the 16 SmartCourse ones.
+// Confirmed live (2026-08-22): starting "Small Load" (id 51) via OperationStart applied our
+// requested Soil/SpinSpeed/WaterTemp, but the machine kept reporting SmartCourse/OPCourse
+// identity for whatever was actually resident (a previously app-downloaded course), not id 51.
+// So OperationStart's SmartCourse field isn't a live selector - the machine only ever runs the
+// one SmartCourse actually downloaded onto it, and offering the other 15 as if they were
+// startable was misleading. Real download appears to be a separate, still-unimplemented
+// command (modelJson's ControlWifi.action.CourseDownload). SMART_COURSE below stays as a
+// read-only reflection of whatever's actually resident.
 
 const STATES: Record<number, string> = {
     0: 'Off',
@@ -143,9 +147,9 @@ const AP_COURSE: Record<number, string> = {
 // Remote-start defaults per course, straight from modelJson's APCourse[id].function[]
 // (Soil/WaterTemp/SpinSpeed) and APCourse[id].OPCourse. id 11 (Spin Only, hidden —
 // "visibility":"gone" in the modelJson) is deliberately excluded: not offered by the
-// physical dial or the official app either. id 10 (Download Course) is handled separately
-// below, via SMART_COURSE_DEFAULTS — it's not a fixed course, it's the "a SmartCourse is
-// loaded" slot.
+// physical dial or the official app either. id 10 (Download Course) is also excluded - it's
+// not a fixed course, it's "whatever SmartCourse is actually resident on the machine", and we
+// have no way to control that (see the header comment).
 const COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTemp: number; opCourse: number }> = {
     1: { soil: 0, spinSpeed: 3, waterTemp: 0, opCourse: 13 }, // Tub Clean
     2: { soil: 3, spinSpeed: 5, waterTemp: 6, opCourse: 8 }, // Bright Whites
@@ -157,34 +161,6 @@ const COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTe
     8: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 14 }, // Towels
     9: { soil: 1, spinSpeed: 5, waterTemp: 6, opCourse: 12 }, // Speed Wash
 }
-
-// App-downloadable "smart" courses, straight from modelJson's SmartCourse[id].function[] and
-// .OPCourse — same shape as COURSE_DEFAULTS above. Every entry has controlEnable:true and
-// downloadEnable:true in the spec. Starting one is the same OperationStart command as an
-// AP_COURSE start, just with APCourse fixed at 10 ("Download Course") and SmartCourse set to
-// the real id instead of 0 — no new/guessed command needed, only different template values.
-// Not yet confirmed against a real captured command (unlike the AP_COURSE path).
-const SMART_COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTemp: number; opCourse: number }> =
-    {
-        51: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 15 }, // Small Load
-        52: { soil: 3, spinSpeed: 3, waterTemp: 2, opCourse: 6 }, // Color Care
-        53: { soil: 1, spinSpeed: 3, waterTemp: 2, opCourse: 10 }, // Beachwear
-        54: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 6 }, // New Clothes
-        55: { soil: 3, spinSpeed: 3, waterTemp: 2, opCourse: 6 }, // Denim
-        59: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 10 }, // Swimwear
-        60: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Rainy Day
-        61: { soil: 1, spinSpeed: 3, waterTemp: 4, opCourse: 21 }, // Gym Clothes
-        63: { soil: 1, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Sweat Stains
-        64: { soil: 1, spinSpeed: 5, waterTemp: 6, opCourse: 12 }, // Single Garments
-        100: { soil: 3, spinSpeed: 5, waterTemp: 6, opCourse: 6 }, // Baby Clothes
-        105: { soil: 3, spinSpeed: 2, waterTemp: 4, opCourse: 6 }, // Overnight Wash
-        106: { soil: 3, spinSpeed: 5, waterTemp: 2, opCourse: 6 }, // Econo Wash
-        107: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 10 }, // Delicate Dresses
-        108: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Half Load Wash
-        109: { soil: 5, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Full Load Wash
-    }
-
-const DOWNLOAD_COURSE_AP_ID = 10
 
 const DEFAULT_COURSE_ID = 5 // Normal
 
@@ -221,7 +197,9 @@ const OP_COURSE: Record<number, string> = {
 // SmartCourse (byte 20): a course downloaded from the app's "smart course" picker, distinct
 // from AP_COURSE's physical-dial courses. modelJson's SmartCourse table has exactly these 16
 // entries (not ~90 — corrected after actually counting); ids outside this table (or 0,
-// meaning none downloaded) fall back to their raw number. Keys match SMART_COURSE_DEFAULTS.
+// meaning none downloaded) fall back to their raw number. Read-only: this is a label for
+// whatever the machine reports as resident, not something course_selection can set (see the
+// header comment) — there's no defaults table to pair it with any more.
 const SMART_COURSE: Record<number, string> = {
     51: 'Small Load',
     52: 'Color Care',
@@ -264,29 +242,20 @@ function encodeCourse(
     return Buffer.from(bytes).toString('base64')
 }
 
-// courseId is either an AP_COURSE dial position (1-9) or a SMART_COURSE id (51+) - the two
-// id ranges never overlap, so a single numeric selection can be resolved against either
-// table. A SmartCourse start is encoded with APCourse fixed at DOWNLOAD_COURSE_AP_ID (10,
-// "a course is loaded") and the real SmartCourse id in the SmartCourse slot instead of 0 -
-// same command, same confirmed encoding, just different template values. Not yet confirmed
-// against a real captured SmartCourse start (unlike the AP_COURSE path).
+// courseId is an AP_COURSE dial position (1-9). SmartCourse ids are deliberately not
+// resolvable here — see the header comment for why offering them as startable was wrong.
 function encodeCourseStart(courseId: number): string | undefined {
     const ap = COURSE_DEFAULTS[courseId]
     if (ap) return encodeCourse(courseId, 0, ap)
 
-    const smart = SMART_COURSE_DEFAULTS[courseId]
-    if (smart) return encodeCourse(DOWNLOAD_COURSE_AP_ID, courseId, smart)
-
     return undefined
 }
 
-// Every id that's actually startable (AP_COURSE dial positions + SMART_COURSE ids), for the
-// course_selection select's option list and its name -> id reverse lookup. The two id ranges
-// don't overlap, so this can be a single flat map.
-const SELECTABLE_COURSE_NAMES: Record<number, string> = {
-    ...Object.fromEntries(Object.keys(COURSE_DEFAULTS).map((id) => [id, AP_COURSE[Number(id)]])),
-    ...Object.fromEntries(Object.keys(SMART_COURSE_DEFAULTS).map((id) => [id, SMART_COURSE[Number(id)]])),
-}
+// Every id that's actually startable, for the course_selection select's option list and its
+// name -> id reverse lookup.
+const SELECTABLE_COURSE_NAMES: Record<number, string> = Object.fromEntries(
+    Object.keys(COURSE_DEFAULTS).map((id) => [id, AP_COURSE[Number(id)]]),
+)
 
 export default class Device extends HADevice {
     constructor(
@@ -686,18 +655,15 @@ export default class Device extends HADevice {
             this.publishProperty('initial_time', timeInitial)
             this.publishProperty('remaining_time', timeRemain)
 
-            // Keep the pending course-to-start in sync with whatever's actually dialed in
-            // on the machine, as long as nobody's picked a different one via HA yet. A loaded
-            // SmartCourse reports APCourse=DOWNLOAD_COURSE_AP_ID with the real course in the
-            // SmartCourse byte, so prefer that when present.
-            if (!this.courseSelectedByUser) {
-                if (apCourse === DOWNLOAD_COURSE_AP_ID && SMART_COURSE_DEFAULTS[smartCourse]) {
-                    this.pendingCourseId = smartCourse
-                    this.publishProperty('course_selection', SMART_COURSE[smartCourse])
-                } else if (COURSE_DEFAULTS[apCourse]) {
-                    this.pendingCourseId = apCourse
-                    this.publishProperty('course_selection', AP_COURSE[apCourse])
-                }
+            // Keep the pending course-to-start in sync with whatever's actually dialed in on
+            // the machine, as long as nobody's picked a different one via HA yet. A resident
+            // SmartCourse reports APCourse=10, which isn't in COURSE_DEFAULTS - deliberately
+            // left unhandled here, since SmartCourse names aren't selectable options any more
+            // (see the header comment); course_selection just keeps showing its last valid
+            // value in that case rather than publishing something HA would reject.
+            if (!this.courseSelectedByUser && COURSE_DEFAULTS[apCourse]) {
+                this.pendingCourseId = apCourse
+                this.publishProperty('course_selection', AP_COURSE[apCourse])
             }
         })
 

@@ -93,7 +93,9 @@ describe(MODEL_ID, () => {
         assert.ok((components.status.options as string[]).includes('Running'))
         assert.ok((components.status.options as string[]).includes('Error auto-off'))
 
-        // 9 physical-dial courses + 16 app-downloadable SmartCourse ones.
+        // Only the 9 physical-dial courses are selectable - see the class header comment for
+        // why SmartCourse ids were removed from here (confirmed live: OperationStart can't
+        // actually select which SmartCourse runs, only the physical-dial ones are real).
         assert.deepEqual(components.course_selection.options, [
             'Tub Clean',
             'Bright Whites',
@@ -104,22 +106,6 @@ describe(MODEL_ID, () => {
             'Delicates',
             'Towels',
             'Speed Wash',
-            'Small Load',
-            'Color Care',
-            'Beachwear',
-            'New Clothes',
-            'Denim',
-            'Swimwear',
-            'Rainy Day',
-            'Gym Clothes',
-            'Sweat Stains',
-            'Single Garments',
-            'Baby Clothes',
-            'Overnight Wash',
-            'Econo Wash',
-            'Delicate Dresses',
-            'Half Load Wash',
-            'Full Load Wash',
         ])
     })
 
@@ -322,20 +308,23 @@ describe(MODEL_ID, () => {
         )
     })
 
-    test('selecting a SmartCourse and starting sends APCourse=10 with the real SmartCourse id', () => {
+    test('selecting a SmartCourse by name is a no-op - only the 9 dial courses are selectable', () => {
+        // Regression test: confirmed live (2026-08-22) that OperationStart's SmartCourse field
+        // doesn't actually select which SmartCourse runs - the machine only ever runs whatever
+        // is actually resident. SmartCourse names were removed from SELECTABLE_COURSE_NAMES, so
+        // this HA write should be silently ignored rather than changing pendingCourseId.
         const { ha, thinq, dev } = makeDevice()
         dev.setProperty('course_selection', 'Small Load')
-        assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Small Load')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal') // unchanged default
 
         thinq.resetRecorder()
         dev.setProperty('remote_start_button', '')
         const sent = thinq.sent[0] as { Data: string }
-        // Small Load (SmartCourse id 51): Soil=3, SpinSpeed=5, WaterTemp=4, OPCourse=15.
-        // APCourse is fixed at 10 (Download Course) and the SmartCourse slot carries 51,
-        // instead of APCourse=<dial id> and SmartCourse=0 for a physical-dial course.
+        // Still starts the default (Normal, id 5) course - the rejected SmartCourse pick never
+        // touched pendingCourseId.
         assert.deepEqual(
             [...Buffer.from(sent.Data, 'base64')],
-            [10, 3, 5, 4, 0, 0, 0, 0, 0, 0x20, 15, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [5, 3, 5, 4, 0, 0, 0, 0, 0, 0x20, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         )
     })
 
