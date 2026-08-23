@@ -503,6 +503,22 @@ export default class Device extends HADevice {
                         icon: 'mdi:clock-check-outline',
                         entity_category: 'diagnostic',
                     },
+                    initial_bit: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-initial-bit',
+                        state_topic: '$this/initial_bit',
+                        name: 'Initial bit',
+                        icon: 'mdi:flag-outline',
+                        entity_category: 'diagnostic',
+                    },
+                    option3_raw: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-option3-raw',
+                        state_topic: '$this/option3_raw',
+                        name: 'Option3 (raw)',
+                        icon: 'mdi:code-braces',
+                        entity_category: 'diagnostic',
+                    },
                 },
             }),
         )
@@ -529,6 +545,7 @@ export default class Device extends HADevice {
             const reserveM = buf[13]
             const option1 = buf[14]
             const option2 = buf[15]
+            const option3 = buf[16]
             const preState = buf[19]
             const smartCourse = buf[20]
             const tclCount = buf[21]
@@ -564,6 +581,8 @@ export default class Device extends HADevice {
             this.publishProperty('fresh_care', option2 & 0x01 ? 'ON' : 'OFF')
             this.publishProperty('coldwash', option2 & 0x10 ? 'ON' : 'OFF')
             this.publishProperty('remote_start', option2 & 0x80 ? 'ON' : 'OFF')
+            this.publishProperty('initial_bit', option3 & 0x20 ? 'ON' : 'OFF')
+            this.publishProperty('option3_raw', option3)
             this.publishProperty('tub_clean_count', tclCount)
             this.publishProperty('load_level', loadLevel)
             this.publishProperty('reserve_time', reserveH * 60 + reserveM)

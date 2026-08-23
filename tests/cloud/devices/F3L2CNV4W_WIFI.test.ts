@@ -31,6 +31,15 @@ const SAMPLE_STATE_ERROR_DE1 = buf(`
     07 00 00 00 00 05 11 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 `)
 
+// Real capture (2026-08-22), not synthetic: the courseInfo mirror bundled inside a
+// mid-cycle WasherMonitoring diagmon report, decoded from its base64 <data> field.
+// State=Detecting, Normal course, RemoteStart armed, tub-clean count 48. Option3=2 here —
+// a real, undocumented bit pattern (not InitialBit/0x20), useful for confirming option3_raw
+// surfaces it as-is rather than only recognizing the one named bit.
+const SAMPLE_STATE_REAL_MIDCYCLE_COURSEINFO = buf(`
+    14 01 11 01 11 05 00 03 05 04 02 00 00 00 00 80 02 00 00 05 6a 30 00 00
+`)
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq1Device(DEVICE_ID, META)
@@ -70,6 +79,8 @@ describe(MODEL_ID, () => {
             'coldwash',
             'fresh_care',
             'remote_start',
+            'initial_bit',
+            'option3_raw',
             'tub_clean_count',
             'load_level',
             'reserve_time',
@@ -160,8 +171,25 @@ describe(MODEL_ID, () => {
         assert.equal(props.error, 'OFF')
         assert.equal(props.op_course, 'Normal')
         assert.equal(props.smart_course, '0')
+        assert.equal(props.initial_bit, 'OFF')
+        assert.equal(props.option3_raw, 0)
         assert.equal(props.extra_rinse, 'OFF')
         assert.equal(props.load_level, 0)
+    })
+
+    test('real mid-cycle capture decodes cleanly, including an undocumented Option3 bit', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_REAL_MIDCYCLE_COURSEINFO)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.status, 'Detecting')
+        assert.equal(props.course, 'Normal')
+        assert.equal(props.remote_start, 'ON')
+        assert.equal(props.tub_clean_count, 48)
+        assert.equal(props.smart_course, 'Econo Wash')
+        // Option3=2 here (bit 1) — not InitialBit (bit 5, 0x20) — so the named sensor stays
+        // off, but the raw byte still surfaces the undocumented bit for future investigation.
+        assert.equal(props.initial_bit, 'OFF')
+        assert.equal(props.option3_raw, 2)
     })
 
     test('Door-open error publishes error binary + descriptive message', () => {
