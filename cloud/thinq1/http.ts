@@ -138,6 +138,17 @@ export function routes(config: Config, onDiagmon?: (deviceId: string, diagMonTyp
         res.end()
     })
 
+    router.post('/lgehadm/api/Rtos/WasherCourseDownloadSvc', (req, res) => {
+        // Not yet decoded — previously unhandled entirely (fell through to the generic {}
+        // JSON fallback, which is also the wrong response shape: every other /lgehadm/api/Rtos
+        // endpoint gets an XML lgedmRoot envelope back, not bare JSON). Log the body so a real
+        // SmartCourse download attempt can be captured and its shape cross-checked against
+        // modelJson's ControlWifi.action.CourseDownload (tag: COURSE/ID/DATA).
+        log('HTTPS', `WasherCourseDownloadSvc ${req.header('x-lgedm-deviceid')}: ${JSON.stringify(req.body)}`)
+        res.header('Content-type: text/xml;charset=utf-8')
+        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
+    })
+
     router.post('/api/product/sendPushMessage', (req, res) => {
         // Not yet decoded — this is the device's own push-notification channel
         // (messageCode/langCode), the likely source of "cycle complete"/error events that
