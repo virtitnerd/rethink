@@ -1,10 +1,56 @@
 import { Request, Response, Router } from 'express'
+import fetch from 'node-fetch'
+import * as HTTPS from 'node:https'
 import { Config } from '@/util/config'
 import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser'
 import { Metadata } from '../thinq'
 import log from '@/util/logging'
 
 const XML_HEADER = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
+
+// The fixed, non-personal device-API credential every real ThinQ1 device uses to talk to LG
+// (not the user's account token) - already proven working in bridge/thinq1connection.ts's own
+// TotalDeviceInfoSvc call during bridge startup. Reused here to proxy a couple of endpoints we
+// don't understand well enough to fabricate a correct response for.
+const LG_DEVICE_AUTH = {
+    'x-lgedm-userid': 'lgehadmUser',
+    'x-lgedm-password': 'bxLoLAZ+rp3oJDbEzRuIfAG4YumeqwWM9l6uUH6TupQ=',
+}
+
+// Forwards a device's request to the real LG server and returns its response verbatim, but
+// only while this device is actively bridged right now (see Bridge.activeHttpServer) - not a
+// permanent cloud dependency, just a capture tool for endpoints whose real response we don't
+// know yet. Returns null (caller should fall back to its own best-guess response) if there's
+// no active bridge for this device, or the proxy call itself fails.
+async function proxyToLG(
+    getActiveHttpServer: ((deviceId: string) => string | undefined) | undefined,
+    deviceId: string | undefined,
+    path: string,
+    body: unknown,
+): Promise<string | null> {
+    const httpServer = deviceId && getActiveHttpServer?.(deviceId)
+    if (!httpServer) return null
+
+    try {
+        const resp = await fetch(httpServer + path, {
+            method: 'POST',
+            headers: {
+                Accept: 'text/xml',
+                'content-type': 'text/xml;charset=utf-8',
+                ...LG_DEVICE_AUTH,
+                'x-lgedm-deviceid': deviceId,
+            },
+            body: XML_HEADER + new XMLBuilder().build(body),
+            agent: new HTTPS.Agent({ keepAlive: true, rejectUnauthorized: false }),
+        })
+        const text = await resp.text()
+        log('HTTPS', `proxied ${path} ${deviceId} -> ${resp.status} ${text}`)
+        return text
+    } catch (err) {
+        log('HTTPS', `proxying ${path} ${deviceId} failed: ${err}`)
+        return null
+    }
+}
 
 const deviceMeta: Record<string, Metadata> = {}
 export function getDeviceMetadata(id: string) {
@@ -50,7 +96,11 @@ function xmlParser(req: Request, res: Response, next: () => void) {
     })
 }
 
-export function routes(config: Config, onDiagmon?: (deviceId: string, diagMonType: string, decoded: unknown) => void) {
+export function routes(
+    config: Config,
+    onDiagmon?: (deviceId: string, diagMonType: string, decoded: unknown) => void,
+    getActiveHttpServer?: (deviceId: string) => string | undefined,
+) {
     const router = Router()
     router.use(xmlParser)
 
@@ -108,16 +158,17 @@ export function routes(config: Config, onDiagmon?: (deviceId: string, diagMonTyp
         res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: response }))
     })
 
-    router.post('/lgehadm/api/Rtos/ContentsVerSvc', (req, res) => {
-        // Not yet decoded — previously unhandled entirely (fell through to the generic {}
-        // fallback). Called on every single connect, before anything else, which suggests a
-        // "what course-catalog content version do you have" handshake - worth capturing on
-        // its own since a wrong/missing answer here could be poisoning the SmartCourse
-        // download flow before WasherCourseDownloadSvc is ever reached. Log the request body
-        // (whatever version info it sends) so we can figure out what a real answer looks like.
-        log('HTTPS', `ContentsVerSvc ${req.header('x-lgedm-deviceid')}: ${JSON.stringify(req.body)}`)
+    router.post('/lgehadm/api/Rtos/ContentsVerSvc', async (req, res) => {
+        // Called on every single connect, before anything else - looks like a "what
+        // course-catalog content version do you have" handshake. We don't know what a correct
+        // answer looks like, so proxy to the real LG server while actively bridged and hand
+        // back its real response instead of guessing; otherwise fall back to a generic OK.
+        const deviceId = req.header('x-lgedm-deviceid')
+        log('HTTPS', `ContentsVerSvc ${deviceId}: ${JSON.stringify(req.body)}`)
+
+        const proxied = await proxyToLG(getActiveHttpServer, deviceId, '/lgehadm/api/Rtos/ContentsVerSvc', req.body)
         res.header('Content-type: text/xml;charset=utf-8')
-        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
+        res.end(proxied ?? XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
     })
 
     router.post('/lgehadm/api/Grid/PowerSavingInfoSvc', (req, res) => {
@@ -150,15 +201,25 @@ export function routes(config: Config, onDiagmon?: (deviceId: string, diagMonTyp
         res.end()
     })
 
-    router.post('/lgehadm/api/Rtos/WasherCourseDownloadSvc', (req, res) => {
-        // Not yet decoded — previously unhandled entirely (fell through to the generic {}
-        // JSON fallback, which is also the wrong response shape: every other /lgehadm/api/Rtos
-        // endpoint gets an XML lgedmRoot envelope back, not bare JSON). Log the body so a real
-        // SmartCourse download attempt can be captured and its shape cross-checked against
-        // modelJson's ControlWifi.action.CourseDownload (tag: COURSE/ID/DATA).
-        log('HTTPS', `WasherCourseDownloadSvc ${req.header('x-lgedm-deviceid')}: ${JSON.stringify(req.body)}`)
+    router.post('/lgehadm/api/Rtos/WasherCourseDownloadSvc', async (req, res) => {
+        // The app sends {contents:"course", selectedCd:<catalog code>} - a lookup, not the
+        // actual course data. Real content lives on LG's own course-catalog backend, which we
+        // don't have; proxy to it while actively bridged so the app gets a real answer instead
+        // of the empty ack that was producing "Cycle failed to download." Cross-check the real
+        // response against modelJson's ControlWifi.action.CourseDownload (tag: COURSE/ID/DATA)
+        // once captured - it may turn out to be derivable from our own SMART_COURSE table
+        // instead of genuinely per-account content, which would let us serve it locally too.
+        const deviceId = req.header('x-lgedm-deviceid')
+        log('HTTPS', `WasherCourseDownloadSvc ${deviceId}: ${JSON.stringify(req.body)}`)
+
+        const proxied = await proxyToLG(
+            getActiveHttpServer,
+            deviceId,
+            '/lgehadm/api/Rtos/WasherCourseDownloadSvc',
+            req.body,
+        )
         res.header('Content-type: text/xml;charset=utf-8')
-        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
+        res.end(proxied ?? XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
     })
 
     router.post('/api/product/sendPushMessage', (req, res) => {

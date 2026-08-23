@@ -110,6 +110,19 @@ export class Bridge extends TypedEmitter<BridgeEvents> {
         Object.values(this.manager.allDevices).forEach(this.#start.bind(this))
     }
 
+    // Returns the real LG gateway URL for this device, but only while it's actively bridged
+    // right now - deliberately not based on stale persisted device state (BridgeState.getDeviceState),
+    // since LG could rotate/retire that URL between bridge sessions. Used by
+    // cloud/thinq1/http.ts to proxy a couple of not-yet-understood endpoints
+    // (ContentsVerSvc/WasherCourseDownloadSvc) to the real LG servers for capture, instead of
+    // guessing at a response - only while you've deliberately chosen to touch real LG right now.
+    activeHttpServer(deviceId: string): string | undefined {
+        const bridged = this.bridgedDevices.get(deviceId)
+        if (!bridged?.connection) return undefined
+        if (!(bridged.upstream instanceof Thinq1Device)) return undefined
+        return bridged.upstream.state.httpServer
+    }
+
     #start(dev: AnyDevice) {
         const clientDevice = this.loadSavedDevice(dev)
         if (!clientDevice) return
