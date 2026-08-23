@@ -250,7 +250,40 @@ describe(MODEL_ID, () => {
         )
     })
 
-    // OperationStart's encoding is cross-confirmed against ha-smartthinq-sensors' independent
-    // ThinQ1 command builder (see the class header comment), but not yet against a real
-    // captured command from this device.
+    test('diagmon energyMonInfo publishes last-cycle energy/course/completion time', () => {
+        const { ha, thinq } = makeDevice()
+        // Real captured report (2026-08-22, Normal course completing): diagMonType
+        // "WasherMonitoring", diagMonData base64-decodes to
+        // <lgedmRoot><energyMonInfo><event>2</event><course>5</course><power>154</power>
+        // <option>...</option><dlCourse>106</dlCourse>
+        // <useDate>20260822 23:48:24</useDate></energyMonInfo></lgedmRoot>
+        thinq.emit('diagmon', 'WasherMonitoring', {
+            lgedmRoot: {
+                energyMonInfo: {
+                    event: 2,
+                    course: 5,
+                    power: 154,
+                    option: 'FAERAREFAAMFBAIAAAAAgAIAAAVqMAAA',
+                    dlCourse: 106,
+                    useDate: '20260822 23:48:24',
+                },
+            },
+        })
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.last_cycle_energy, 154)
+        assert.equal(props.last_cycle_course, 'Normal')
+        assert.equal(props.last_cycle_completed, '20260822 23:48:24')
+    })
+
+    test('diagmon tubInfo/courseInfo are ignored (not energyMonInfo)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('diagmon', 'WasherMonitoring', {
+            lgedmRoot: { tubInfo: { event: 2, count: 49, maxCount: 30 } },
+        })
+        assert.equal(ha.devices[DEVICE_ID].properties.last_cycle_energy, undefined)
+    })
+
+    // OperationStart's encoding is cross-confirmed against a real captured command from this
+    // device (see the class header comment and the test above) as well as
+    // ha-smartthinq-sensors' independent ThinQ1 command builder.
 })

@@ -16,11 +16,16 @@ import { Metadata } from '../thinq'
 // wire shape ({Cmd:'Control', CmdOpt:..., Value:...}) matches WTDN3.ts's already-verified
 // pattern, cross-confirmed by the modelJson's ControlWifi.action entries.
 // OperationStart's course-parameter array encoding (courseId/Soil/SpinSpeed/WaterTemp/../
-// OPCourse as one byte each, base64) is cross-confirmed against ha-smartthinq-sensors'
-// independent ThinQ1 v1 command builder, which already drives this exact model — but not
-// yet against a real captured command from this device (see tools/rethink-capture.ts).
+// OPCourse as one byte each, base64) is confirmed against a real captured command from this
+// device (2026-08-22, Normal course) — see the test file — and independently cross-checked
+// against ha-smartthinq-sensors' ThinQ1 v1 command builder, which already drives this exact
+// model.
 // Remote power-ON is NOT implemented: the modelJson defines no PowerOn action at all for
 // this model (the physical dial is presumably the only way to arm remote start).
+//
+// Per-cycle energy usage (last_cycle_energy/course/completed) comes from a second channel
+// entirely: HTTP diagmon reports (cloud/thinq1/http.ts), not the persistent :47878 status
+// socket this class otherwise reads from. See the thinq.on('diagmon', ...) handler below.
 
 const STATES: Record<number, string> = {
     0: 'Off',
@@ -471,6 +476,33 @@ export default class Device extends HADevice {
                         unit_of_measurement: 'min',
                         name: 'Remaining time',
                     },
+                    last_cycle_energy: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-last-cycle-energy',
+                        state_topic: '$this/last_cycle_energy',
+                        // No unit_of_measurement/device_class yet: the value (energyMonInfo's
+                        // "power" field) is very plausibly Wh, but that's not confirmed against
+                        // the app's own displayed number yet. Labeling it "energy"/Wh prematurely
+                        // would let HA's Energy Dashboard ingest a value we haven't verified.
+                        name: 'Last cycle energy usage (raw, unconfirmed unit)',
+                        icon: 'mdi:lightning-bolt-outline',
+                    },
+                    last_cycle_course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-last-cycle-course',
+                        state_topic: '$this/last_cycle_course',
+                        name: 'Last completed course',
+                        icon: 'mdi:pin-outline',
+                        entity_category: 'diagnostic',
+                    },
+                    last_cycle_completed: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-last-cycle-completed',
+                        state_topic: '$this/last_cycle_completed',
+                        name: 'Last cycle completed at',
+                        icon: 'mdi:clock-check-outline',
+                        entity_category: 'diagnostic',
+                    },
                 },
             }),
         )
@@ -544,6 +576,26 @@ export default class Device extends HADevice {
                 this.pendingCourseId = apCourse
                 this.publishProperty('course_selection', AP_COURSE[apCourse])
             }
+        })
+
+        // Confirmed against a real captured report (2026-08-22, Normal course): diagMonType
+        // "WasherMonitoring" wraps a base64'd XML blob with one of several inner elements —
+        // tubInfo (idle tub-clean counter, redundant with byte 21 above), courseInfo (a
+        // mid-cycle mirror of the same 24-byte Monitoring frame), and energyMonInfo (the one
+        // that matters: course/power/useDate for a just-completed cycle). Only energyMonInfo
+        // is handled here; the other two don't carry anything we don't already have.
+        thinq.on('diagmon', (diagMonType, decoded) => {
+            if (diagMonType !== 'WasherMonitoring') return
+
+            const info = (
+                decoded as { lgedmRoot?: { energyMonInfo?: { course?: number; power?: number; useDate?: string } } }
+            )?.lgedmRoot?.energyMonInfo
+            if (!info) return
+
+            if (typeof info.power === 'number') this.publishProperty('last_cycle_energy', info.power)
+            if (typeof info.course === 'number')
+                this.publishProperty('last_cycle_course', AP_COURSE[info.course] ?? String(info.course))
+            if (typeof info.useDate === 'string') this.publishProperty('last_cycle_completed', info.useDate)
         })
     }
 

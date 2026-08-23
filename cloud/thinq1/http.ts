@@ -11,6 +11,21 @@ export function getDeviceMetadata(id: string) {
     return deviceMeta[id]
 }
 
+// diagMonData is base64 of either a plain decimal string (e.g. ScomoCourse's course id) or
+// XML (WasherMonitoring's tubInfo/courseInfo/energyMonInfo) — try XML first, fall back to
+// the raw decoded string.
+function decodeDiagMonData(b64: string): unknown {
+    const raw = Buffer.from(b64, 'base64')
+    if (raw[0] === 0x3c /* '<' */) {
+        try {
+            return new XMLParser().parse(raw)
+        } catch {
+            // fall through to the raw string below
+        }
+    }
+    return raw.toString('utf-8')
+}
+
 function xmlParser(req: Request, res: Response, next: () => void) {
     const buffers: Buffer[] = []
     let length = 0
@@ -35,7 +50,7 @@ function xmlParser(req: Request, res: Response, next: () => void) {
     })
 }
 
-export function routes(config: Config) {
+export function routes(config: Config, onDiagmon?: (deviceId: string, diagMonType: string, decoded: unknown) => void) {
     const router = Router()
     router.use(xmlParser)
 
@@ -104,11 +119,22 @@ export function routes(config: Config) {
     })
 
     router.post('/lgehadm/report/diagmon', (req, res) => {
-        // Not yet decoded — this is where per-cycle energy/water usage reports arrive
-        // (WasherMonitoring diagMonType, separate from the periodic Mon/Start status
-        // channel). Log the raw parsed body so a real report can be captured and a proper
-        // decoder written from it, the same way the rest of this device's fields were.
-        log('HTTPS', `diagmon ${req.header('x-lgedm-deviceid')}: ${JSON.stringify(req.body)}`)
+        // Per-cycle energy/water usage and tub-clean-alert reports arrive here
+        // (WasherMonitoring diagMonType), separate from the periodic Mon/Start status
+        // channel. diagMonData is double-encoded (base64 of either a plain string or XML,
+        // which may itself contain further base64 fields) — decode what we can generically
+        // here and hand it to the matching device, which knows what its fields mean.
+        // Unlike every other lgehadm endpoint, this one doesn't send x-lgedm-deviceid —
+        // the device id only exists inside the body, as Report.devId.
+        const report = req.body?.Report
+        const deviceId = req.header('x-lgedm-deviceid') ?? report?.devId
+        if (deviceId && typeof report?.diagMonType === 'string' && typeof report?.diagMonData === 'string') {
+            const decoded = decodeDiagMonData(report.diagMonData)
+            log('HTTPS', `diagmon ${deviceId} ${report.diagMonType}: ${JSON.stringify(decoded)}`)
+            onDiagmon?.(deviceId, report.diagMonType, decoded)
+        } else {
+            log('HTTPS', `diagmon ${deviceId}: ${JSON.stringify(req.body)}`)
+        }
         res.end()
     })
 
