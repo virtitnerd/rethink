@@ -26,6 +26,12 @@ import { Metadata } from '../thinq'
 // Per-cycle energy usage (last_cycle_energy/course/completed) comes from a second channel
 // entirely: HTTP diagmon reports (cloud/thinq1/http.ts), not the persistent :47878 status
 // socket this class otherwise reads from. See the thinq.on('diagmon', ...) handler below.
+//
+// course_selection also offers the 16 app-downloadable SMART_COURSE_DEFAULTS entries
+// alongside the 9 physical-dial ones — same OperationStart command, same confirmed encoding,
+// just APCourse fixed at DOWNLOAD_COURSE_AP_ID with the real SmartCourse id populated instead
+// of 0. Every SmartCourse entry has controlEnable/downloadEnable:true in the modelJson, but
+// this path itself isn't yet confirmed against a real captured SmartCourse start.
 
 const STATES: Record<number, string> = {
     0: 'Off',
@@ -135,10 +141,11 @@ const AP_COURSE: Record<number, string> = {
 }
 
 // Remote-start defaults per course, straight from modelJson's APCourse[id].function[]
-// (Soil/WaterTemp/SpinSpeed) and APCourse[id].OPCourse. ids 10 (Download Course) and 11
-// (Spin Only, hidden — "visibility":"gone" in the modelJson) are deliberately excluded:
-// 10 needs a downloaded SmartCourse payload we don't have tabled, and 11 isn't offered
-// by the physical dial or the official app either.
+// (Soil/WaterTemp/SpinSpeed) and APCourse[id].OPCourse. id 11 (Spin Only, hidden —
+// "visibility":"gone" in the modelJson) is deliberately excluded: not offered by the
+// physical dial or the official app either. id 10 (Download Course) is handled separately
+// below, via SMART_COURSE_DEFAULTS — it's not a fixed course, it's the "a SmartCourse is
+// loaded" slot.
 const COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTemp: number; opCourse: number }> = {
     1: { soil: 0, spinSpeed: 3, waterTemp: 0, opCourse: 13 }, // Tub Clean
     2: { soil: 3, spinSpeed: 5, waterTemp: 6, opCourse: 8 }, // Bright Whites
@@ -150,6 +157,34 @@ const COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTe
     8: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 14 }, // Towels
     9: { soil: 1, spinSpeed: 5, waterTemp: 6, opCourse: 12 }, // Speed Wash
 }
+
+// App-downloadable "smart" courses, straight from modelJson's SmartCourse[id].function[] and
+// .OPCourse — same shape as COURSE_DEFAULTS above. Every entry has controlEnable:true and
+// downloadEnable:true in the spec. Starting one is the same OperationStart command as an
+// AP_COURSE start, just with APCourse fixed at 10 ("Download Course") and SmartCourse set to
+// the real id instead of 0 — no new/guessed command needed, only different template values.
+// Not yet confirmed against a real captured command (unlike the AP_COURSE path).
+const SMART_COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTemp: number; opCourse: number }> =
+    {
+        51: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 15 }, // Small Load
+        52: { soil: 3, spinSpeed: 3, waterTemp: 2, opCourse: 6 }, // Color Care
+        53: { soil: 1, spinSpeed: 3, waterTemp: 2, opCourse: 10 }, // Beachwear
+        54: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 6 }, // New Clothes
+        55: { soil: 3, spinSpeed: 3, waterTemp: 2, opCourse: 6 }, // Denim
+        59: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 10 }, // Swimwear
+        60: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Rainy Day
+        61: { soil: 1, spinSpeed: 3, waterTemp: 4, opCourse: 21 }, // Gym Clothes
+        63: { soil: 1, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Sweat Stains
+        64: { soil: 1, spinSpeed: 5, waterTemp: 6, opCourse: 12 }, // Single Garments
+        100: { soil: 3, spinSpeed: 5, waterTemp: 6, opCourse: 6 }, // Baby Clothes
+        105: { soil: 3, spinSpeed: 2, waterTemp: 4, opCourse: 6 }, // Overnight Wash
+        106: { soil: 3, spinSpeed: 5, waterTemp: 2, opCourse: 6 }, // Econo Wash
+        107: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 10 }, // Delicate Dresses
+        108: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Half Load Wash
+        109: { soil: 5, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Full Load Wash
+    }
+
+const DOWNLOAD_COURSE_AP_ID = 10
 
 const DEFAULT_COURSE_ID = 5 // Normal
 
@@ -184,9 +219,9 @@ const OP_COURSE: Record<number, string> = {
 }
 
 // SmartCourse (byte 20): a course downloaded from the app's "smart course" picker, distinct
-// from AP_COURSE's physical-dial courses. modelJson's SmartCourse table has ~90 entries;
-// only the ones actually reachable are worth naming here — ids outside this table (or 0,
-// meaning none downloaded) fall back to their raw number.
+// from AP_COURSE's physical-dial courses. modelJson's SmartCourse table has exactly these 16
+// entries (not ~90 — corrected after actually counting); ids outside this table (or 0,
+// meaning none downloaded) fall back to their raw number. Keys match SMART_COURSE_DEFAULTS.
 const SMART_COURSE: Record<number, string> = {
     51: 'Small Load',
     52: 'Color Care',
@@ -214,18 +249,43 @@ const SMART_COURSE: Record<number, string> = {
 // SmartCourse and all 9 trailing bytes matched this encoding exactly. The one gap this
 // capture caught: Option3 needs bit 5 (0x20) set — modelJson's "InitialBit" — which a
 // bare 0 does not produce; without it the machine never actually started.
-function encodeCourseStart(courseId: number): string | undefined {
-    const d = COURSE_DEFAULTS[courseId]
-    if (!d) return undefined
+const INITIAL_BIT = 0x20 // Option3 bit 5
 
-    const INITIAL_BIT = 0x20 // Option3 bit 5
-
+function encodeCourse(
+    apCourse: number,
+    smartCourse: number,
+    d: { soil: number; spinSpeed: number; waterTemp: number; opCourse: number },
+): string {
     // prettier-ignore
     const bytes = [
-        courseId, d.soil, d.spinSpeed, d.waterTemp, 0, 0, 0, 0, 0, INITIAL_BIT, d.opCourse, 0,
+        apCourse, d.soil, d.spinSpeed, d.waterTemp, 0, 0, 0, 0, 0, INITIAL_BIT, d.opCourse, smartCourse,
         0, 0, 0, 0, 0, 0, 0, 0, 0,
     ]
     return Buffer.from(bytes).toString('base64')
+}
+
+// courseId is either an AP_COURSE dial position (1-9) or a SMART_COURSE id (51+) - the two
+// id ranges never overlap, so a single numeric selection can be resolved against either
+// table. A SmartCourse start is encoded with APCourse fixed at DOWNLOAD_COURSE_AP_ID (10,
+// "a course is loaded") and the real SmartCourse id in the SmartCourse slot instead of 0 -
+// same command, same confirmed encoding, just different template values. Not yet confirmed
+// against a real captured SmartCourse start (unlike the AP_COURSE path).
+function encodeCourseStart(courseId: number): string | undefined {
+    const ap = COURSE_DEFAULTS[courseId]
+    if (ap) return encodeCourse(courseId, 0, ap)
+
+    const smart = SMART_COURSE_DEFAULTS[courseId]
+    if (smart) return encodeCourse(DOWNLOAD_COURSE_AP_ID, courseId, smart)
+
+    return undefined
+}
+
+// Every id that's actually startable (AP_COURSE dial positions + SMART_COURSE ids), for the
+// course_selection select's option list and its name -> id reverse lookup. The two id ranges
+// don't overlap, so this can be a single flat map.
+const SELECTABLE_COURSE_NAMES: Record<number, string> = {
+    ...Object.fromEntries(Object.keys(COURSE_DEFAULTS).map((id) => [id, AP_COURSE[Number(id)]])),
+    ...Object.fromEntries(Object.keys(SMART_COURSE_DEFAULTS).map((id) => [id, SMART_COURSE[Number(id)]])),
 }
 
 export default class Device extends HADevice {
@@ -263,7 +323,7 @@ export default class Device extends HADevice {
                         availability_topic: '$this/controls_available',
                         name: 'Course selection',
                         icon: 'mdi:tune-vertical-variant',
-                        options: Object.keys(COURSE_DEFAULTS).map((id) => AP_COURSE[Number(id)]),
+                        options: Object.values(SELECTABLE_COURSE_NAMES),
                     },
                     remote_start_button: {
                         platform: 'button',
@@ -533,7 +593,7 @@ export default class Device extends HADevice {
         // The washer reports APCourse=0 while idle/no course actively dialed — that's not
         // in COURSE_DEFAULTS, so the sync-on-data logic below never fires for it. Publish
         // our own default up front so the select entity doesn't sit at "unknown" forever.
-        this.publishProperty('course_selection', AP_COURSE[this.pendingCourseId])
+        this.publishProperty('course_selection', SELECTABLE_COURSE_NAMES[this.pendingCourseId])
 
         thinq.on('data', (buf) => {
             if (buf.length < 24) return
@@ -597,10 +657,17 @@ export default class Device extends HADevice {
             this.publishProperty('remaining_time', timeRemain)
 
             // Keep the pending course-to-start in sync with whatever's actually dialed in
-            // on the machine, as long as nobody's picked a different one via HA yet.
-            if (!this.courseSelectedByUser && COURSE_DEFAULTS[apCourse]) {
-                this.pendingCourseId = apCourse
-                this.publishProperty('course_selection', AP_COURSE[apCourse])
+            // on the machine, as long as nobody's picked a different one via HA yet. A loaded
+            // SmartCourse reports APCourse=DOWNLOAD_COURSE_AP_ID with the real course in the
+            // SmartCourse byte, so prefer that when present.
+            if (!this.courseSelectedByUser) {
+                if (apCourse === DOWNLOAD_COURSE_AP_ID && SMART_COURSE_DEFAULTS[smartCourse]) {
+                    this.pendingCourseId = smartCourse
+                    this.publishProperty('course_selection', SMART_COURSE[smartCourse])
+                } else if (COURSE_DEFAULTS[apCourse]) {
+                    this.pendingCourseId = apCourse
+                    this.publishProperty('course_selection', AP_COURSE[apCourse])
+                }
             }
         })
 
@@ -651,8 +718,10 @@ export default class Device extends HADevice {
             this.thinq.send({ Cmd: 'Control', CmdOpt: 'Operation', Value: 'Stop', Format: 'B64', Data: '' })
         }
         if (prop === 'course_selection') {
-            const id = Number(Object.keys(COURSE_DEFAULTS).find((key) => AP_COURSE[Number(key)] === mqttValue))
-            if (COURSE_DEFAULTS[id]) {
+            const id = Number(
+                Object.keys(SELECTABLE_COURSE_NAMES).find((key) => SELECTABLE_COURSE_NAMES[Number(key)] === mqttValue),
+            )
+            if (SELECTABLE_COURSE_NAMES[id]) {
                 this.pendingCourseId = id
                 this.courseSelectedByUser = true
                 this.publishProperty('course_selection', mqttValue)
