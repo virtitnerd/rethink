@@ -123,6 +123,22 @@ describe(MODEL_ID, () => {
         ])
     })
 
+    test('course_selection/remote_start_button use the list-form availability, not availability_topic', () => {
+        // Regression test: HA's MQTT discovery schema treats `availability_topic` (singular)
+        // and `availability`/`availability_mode` (list) as mutually exclusive within one
+        // entity. The device declares device-level `availability` (see HADevice.config), so
+        // any component here that also wants its own override must use the list form too -
+        // mixing forms makes HA reject the whole component with "two or more values in the
+        // same group of exclusion 'availability'", silently dropping the entity. Confirmed
+        // against real HA logs, not simulated - MockHAConnection has no schema of its own.
+        const { ha } = makeDevice()
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        for (const c of ['course_selection', 'remote_start_button']) {
+            assert.equal(components[c].availability_topic, undefined, `${c} must not use availability_topic`)
+            assert.deepEqual(components[c].availability, [{ topic: '$this/controls_available' }])
+        }
+    })
+
     test('course_selection defaults to Normal on construction, before any data arrives', () => {
         const { ha } = makeDevice()
         assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal')
