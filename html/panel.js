@@ -61,15 +61,28 @@ class DeviceEntry {
         children.push(td)
 
         td = document.createElement('td')
-        let model = this.remoteState.model
+        // Built with DOM APIs rather than string concatenation on purpose: this.remoteState.model
+        // is a modelId reported by the device itself, not something to trust as HTML.
+        td.appendChild(document.createTextNode(this.remoteState.model))
         if (!this.remoteState.mapped) {
-            model += ` <i class="material-icons tooltipped tiny" data-position="bottom" data-tooltip="This device is not supported by rethink. It will not be mapped to HomeAssistant">warning</i>`
+            const badge = document.createElement('a')
+            badge.className = 'chip unsupported-badge tooltipped'
+            badge.href = 'https://github.com/anszom/rethink/wiki/Adding-support-for-a-new-device'
+            badge.target = '_blank'
+            badge.rel = 'noopener'
+            badge.setAttribute('data-position', 'bottom')
+            badge.setAttribute('data-tooltip', 'Not mapped to Home Assistant yet - click to see how to add support')
+            badge.textContent = 'unsupported'
+            td.appendChild(document.createTextNode(' '))
+            td.appendChild(badge)
         }
-        td.innerHTML = model
         children.push(td)
 
         td = document.createElement('td')
-        td.innerText = this.remoteState.platform
+        const platformBadge = document.createElement('span')
+        platformBadge.className = `chip platform-badge platform-${this.remoteState.platform}`
+        platformBadge.textContent = this.remoteState.platform === 'thinq1' ? 'ThinQ1' : 'ThinQ2'
+        td.appendChild(platformBadge)
         children.push(td)
 
         td = document.createElement('td')
@@ -141,7 +154,16 @@ class DeviceEntry {
         }
 
         td = document.createElement('td')
-        td.innerHTML = `<a class="btn waves-effect waves-light" href="monitor?id=${this.id}"><i class="material-icons">troubleshoot</i></a>`
+        const monitorLink = document.createElement('a')
+        monitorLink.className = 'btn waves-effect waves-light tooltipped'
+        monitorLink.href = `monitor?id=${encodeURIComponent(this.id)}`
+        monitorLink.setAttribute('data-position', 'left')
+        monitorLink.setAttribute('data-tooltip', 'Live packet monitor')
+        const monitorIcon = document.createElement('i')
+        monitorIcon.className = 'material-icons'
+        monitorIcon.textContent = 'troubleshoot'
+        monitorLink.appendChild(monitorIcon)
+        td.appendChild(monitorLink)
         children.push(td)
 
         this.row.replaceChildren(...children)
@@ -169,6 +191,12 @@ class DeviceEntry {
         // a class left the switch live while logged out - clicking it just produced an HTTP 400.
         this.bridgeSwitch.disabled = !bridge_status
     }
+}
+
+function refreshDevicesHeader() {
+    const count = Object.keys(devices).length
+    get('devices_count').textContent = count > 0 ? ` (${count})` : ''
+    get('devices_empty').classList.toggle('hide', count > 0)
 }
 
 // The first reconnect is near-immediate and only then does it back off. A socket that closes because
@@ -222,6 +250,8 @@ function connect() {
                     if (!devices[id]) devices[id] = new DeviceEntry(id, j, get('devices_body'))
                     else devices[id].update(j)
                 }
+
+                refreshDevicesHeader()
             }
 
             if (typeof json.bridge === 'object') {

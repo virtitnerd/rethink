@@ -44,7 +44,7 @@
         </div>
 
         <div class="container hide-when-offline">
-            <h4 class="header orange-text">Connected devices</h4>
+            <h4 class="header orange-text">Connected devices<span id="devices_count" class="device-count"></span></h4>
             <table class="highlight">
                 <thead>
                     <tr>
@@ -58,6 +58,14 @@
 
                 <tbody id="devices_body"></tbody>
             </table>
+            <p id="devices_empty" class="devices-empty hide">
+                No devices connected yet - follow the
+                <a
+                    href="https://github.com/anszom/rethink/wiki/Installing-rethink%E2%80%90cloud#step-5-configure-your-device"
+                    >wiki instructions</a
+                >
+                to connect one.
+            </p>
 
             <br />
             Follow the
