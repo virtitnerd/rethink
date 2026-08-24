@@ -51,8 +51,11 @@ nav .brand-logo .material-icons {
 }
 
 /* Turns the bare .container sections into distinct cards instead of text just sitting on the
-   page background - same content, clearer visual grouping. */
-.container {
+   page background - same content, clearer visual grouping. Materialize's own nav markup reuses
+   this same generic .container class internally (<div class="nav-wrapper container">) for
+   unrelated layout purposes - excluding .nav-wrapper is required, not optional, or this card
+   styling (padding/margin/background/shadow) gets jammed inside the nav bar too. */
+.container:not(.nav-wrapper) {
     background: var(--rethink-surface);
     border: 1px solid var(--rethink-border);
     border-radius: 10px;
