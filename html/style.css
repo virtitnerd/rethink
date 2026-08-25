@@ -217,7 +217,13 @@ table.highlight tbody tr:hover {
     box-shadow: 0 1px 0 0 var(--rethink-accent-dark) !important;
 }
 
-.modal-footer .btn-flat {
+/* Materialize's own .btn-flat default (color:#343434, transparent background) assumes a light
+   page - 1.28:1 against our dark-mode card background, confirmed by computing the actual ratio
+   (need 4.5:1), which is as good as invisible. Was only overridden inside .modal-footer before;
+   the activity-log toggle button sits on a plain card, not a modal, so it fell through to the
+   unreadable Materialize default in dark mode - reported live by a real screen, not something
+   jsdom (no layout/paint) could have caught. */
+.btn-flat {
     color: var(--rethink-accent-dark);
 }
 
