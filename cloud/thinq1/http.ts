@@ -6,6 +6,16 @@ import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser'
 import { Metadata } from '../thinq'
 import log from '@/util/logging'
 
+// Raw pre-parse request bytes, stashed by xmlParser() below so proxyToLG() can forward a
+// device's request to LG byte-for-byte instead of rebuilding XML from the parsed object -
+// parsing then rebuilding is lossy (e.g. fast-xml-parser silently turns "0012" into the
+// number 12, dropping the leading zeros LG's own catalog lookups may depend on).
+declare module 'express' {
+    interface Request {
+        rawBody?: Buffer
+    }
+}
+
 const XML_HEADER = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
 
 // The fixed, non-personal device-API credential every real ThinQ1 device uses to talk to LG
@@ -22,32 +32,42 @@ const LG_DEVICE_AUTH = {
 // permanent cloud dependency, just a capture tool for endpoints whose real response we don't
 // know yet. Returns null (caller should fall back to its own best-guess response) if there's
 // no active bridge for this device, or the proxy call itself fails.
+//
+// Forwards req's real raw body and real headers (minus the hop-by-hop ones that must
+// legitimately differ across a new connection) rather than reconstructing them - a device's
+// actual request is the only thing guaranteed to look exactly like what LG expects.
 async function proxyToLG(
     getActiveHttpServer: ((deviceId: string) => string | undefined) | undefined,
     deviceId: string | undefined,
-    path: string,
-    body: unknown,
+    req: Request,
 ): Promise<string | null> {
     const httpServer = deviceId && getActiveHttpServer?.(deviceId)
-    if (!httpServer) return null
+    if (!httpServer || !req.rawBody) return null
+
+    const {
+        host: _host,
+        connection: _connection,
+        'content-length': _cl,
+        'transfer-encoding': _te,
+        ...forwardedHeaders
+    } = req.headers
 
     try {
-        const resp = await fetch(httpServer + path, {
+        const resp = await fetch(httpServer + req.path, {
             method: 'POST',
             headers: {
-                Accept: 'text/xml',
-                'content-type': 'text/xml;charset=utf-8',
+                ...(forwardedHeaders as Record<string, string>),
                 ...LG_DEVICE_AUTH,
                 'x-lgedm-deviceid': deviceId,
             },
-            body: XML_HEADER + new XMLBuilder().build(body),
+            body: req.rawBody,
             agent: new HTTPS.Agent({ keepAlive: true, rejectUnauthorized: false }),
         })
         const text = await resp.text()
-        log('HTTPS', `proxied ${path} ${deviceId} -> ${resp.status} ${text}`)
+        log('HTTPS', `proxied ${req.method} ${req.path} ${deviceId} -> ${resp.status} ${text}`)
         return text
     } catch (err) {
-        log('HTTPS', `proxying ${path} ${deviceId} failed: ${err}`)
+        log('HTTPS', `proxying ${req.method} ${req.path} ${deviceId} failed: ${err}`)
         return null
     }
 }
@@ -90,7 +110,8 @@ function xmlParser(req: Request, res: Response, next: () => void) {
 
     req.on('end', () => {
         if (!error) {
-            req.body = new XMLParser().parse(Buffer.concat(buffers))
+            req.rawBody = Buffer.concat(buffers)
+            req.body = new XMLParser().parse(req.rawBody)
             next()
         }
     })
@@ -166,7 +187,7 @@ export function routes(
         const deviceId = req.header('x-lgedm-deviceid')
         log('HTTPS', `ContentsVerSvc ${deviceId}: ${JSON.stringify(req.body)}`)
 
-        const proxied = await proxyToLG(getActiveHttpServer, deviceId, '/lgehadm/api/Rtos/ContentsVerSvc', req.body)
+        const proxied = await proxyToLG(getActiveHttpServer, deviceId, req)
         res.header('Content-type: text/xml;charset=utf-8')
         res.end(proxied ?? XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
     })
@@ -212,12 +233,7 @@ export function routes(
         const deviceId = req.header('x-lgedm-deviceid')
         log('HTTPS', `WasherCourseDownloadSvc ${deviceId}: ${JSON.stringify(req.body)}`)
 
-        const proxied = await proxyToLG(
-            getActiveHttpServer,
-            deviceId,
-            '/lgehadm/api/Rtos/WasherCourseDownloadSvc',
-            req.body,
-        )
+        const proxied = await proxyToLG(getActiveHttpServer, deviceId, req)
         res.header('Content-type: text/xml;charset=utf-8')
         res.end(proxied ?? XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
     })
@@ -248,7 +264,7 @@ export function routes(
         const deviceId = req.header('x-lgedm-deviceid')
         log('HTTPS', `unhandled ${req.method} ${req.path} ${deviceId}: ${JSON.stringify(req.body)}`)
 
-        const proxied = await proxyToLG(getActiveHttpServer, deviceId, req.path, req.body)
+        const proxied = await proxyToLG(getActiveHttpServer, deviceId, req)
         res.header('Content-type: text/xml;charset=utf-8')
         res.end(proxied ?? XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
     })
