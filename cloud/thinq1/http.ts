@@ -233,5 +233,25 @@ export function routes(
         res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
     })
 
+    // Catch-all for anything not explicitly handled above. Previously these fell all the way
+    // through to rethink-cloud.ts's generic `res.json({})` fallback, silently — no log line,
+    // no real ack, easy to miss real traffic entirely (this is exactly how ContentsVerSvc and
+    // WasherCourseDownloadSvc went unnoticed for as long as they did). Two things this buys us:
+    // - Every unknown endpoint now gets logged with its full method/path/body, so discovering
+    //   a new one is a matter of watching the HTTPS log topic, not stumbling onto it.
+    // - While actively bridged, unknown endpoints get proxied to the real LG server and its
+    //   real response relayed back, instead of a guessed generic ack - the same technique
+    //   already proven for ContentsVerSvc/WasherCourseDownloadSvc, generalized so every future
+    //   unknown endpoint gets it automatically rather than needing to be individually
+    //   whitelisted first.
+    router.use(async (req: Request, res: Response) => {
+        const deviceId = req.header('x-lgedm-deviceid')
+        log('HTTPS', `unhandled ${req.method} ${req.path} ${deviceId}: ${JSON.stringify(req.body)}`)
+
+        const proxied = await proxyToLG(getActiveHttpServer, deviceId, req.path, req.body)
+        res.header('Content-type: text/xml;charset=utf-8')
+        res.end(proxied ?? XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
+    })
+
     return router
 }
