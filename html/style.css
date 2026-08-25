@@ -8,9 +8,16 @@
     --rethink-surface: #ffffff;
     --rethink-nav: #1b2a4a;
     --rethink-accent: #ff9f43;
-    --rethink-accent-dark: #e07b1f;
+    /* #994c00, not the brighter --rethink-accent, because this token is also used as text
+       (headers, links, focus labels) - WCAG AA needs >=4.5:1 against a white/near-white
+       surface for normal-size text, which #e07b1f (2.99:1) and even #b35900 (4.20-4.46:1
+       against the slightly-tinted badge/activity backgrounds) both fell short of; verified
+       against every surface this token actually sits on before picking this value. */
+    --rethink-accent-dark: #994c00;
     --rethink-text: #1f2933;
-    --rethink-text-muted: #6b7787;
+    /* Darkened from #6b7787 (4.20:1) - failed AA against the activity log's --rethink-bg
+       backdrop, the one place this token sits on something other than --rethink-surface. */
+    --rethink-text-muted: #5a6572;
     --rethink-border: #e2e6ea;
     --rethink-thinq1-bg: #e4ecff;
     --rethink-thinq1-text: #2a4d8f;
@@ -18,6 +25,14 @@
     --rethink-thinq2-text: #1e6b3a;
     --rethink-unsupported-bg: #fdece0;
     --rethink-unsupported-bg-hover: #fbdcc2;
+    /* Button backgrounds host white Materialize text, which needs a background dark enough
+       for 4.5:1 regardless of theme - deliberately NOT redefined in the dark media query below,
+       unlike every other token here. Reusing --rethink-accent-dark for this (the original
+       design) put light mode at 2.99:1 and dark mode at 1.98:1 (1.80:1 on hover) since that
+       token needs to go LIGHT in dark mode to stay readable as text on a dark surface, which
+       is the opposite of what a button background hosting white text needs. */
+    --rethink-btn-bg: #b35900;
+    --rethink-btn-bg-hover: #8a3d00;
     color-scheme: light;
 }
 
@@ -138,7 +153,7 @@ table.highlight tbody tr:hover {
 .btn,
 .btn-large,
 .btn-small {
-    background-color: var(--rethink-accent-dark);
+    background-color: var(--rethink-btn-bg);
     border-radius: 6px;
     box-shadow: none;
     text-transform: none;
@@ -148,8 +163,18 @@ table.highlight tbody tr:hover {
 .btn:hover,
 .btn-large:hover,
 .btn-small:hover {
-    background-color: var(--rethink-accent);
-    box-shadow: 0 2px 6px rgba(224, 123, 31, 0.35);
+    background-color: var(--rethink-btn-bg-hover);
+    box-shadow: 0 2px 6px rgba(138, 61, 0, 0.35);
+}
+
+/* Materialize suppresses its own focus ring via box-shadow:none above; restore a visible one
+   for keyboard navigation (WCAG 2.4.7) without showing it on mouse/touch clicks. */
+.btn:focus-visible,
+.btn-large:focus-visible,
+.btn-small:focus-visible,
+.btn-flat:focus-visible {
+    outline: 2px solid var(--rethink-accent);
+    outline-offset: 2px;
 }
 
 .switch label input[type='checkbox']:checked + .lever {
@@ -188,7 +213,58 @@ table.highlight tbody tr:hover {
     color: var(--rethink-text-muted);
 }
 
-/* Platform/unsupported-model badges on the device table - built on Materialize's own .chip
+/* Device cards - replaces the old table. A grid reflows to a single column on narrow
+   viewports on its own (auto-fill collapses once nothing fits two-up), so no extra media
+   query is needed here for that part. */
+.device-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1em;
+}
+
+.device-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    border: 1px solid var(--rethink-border);
+    border-radius: 8px;
+    padding: 1em;
+}
+
+.device-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5em;
+    flex-wrap: wrap;
+}
+
+.device-card-model {
+    font-weight: 600;
+}
+
+.device-card-id {
+    color: var(--rethink-text-muted);
+    font-size: 0.78em;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.device-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5em;
+    margin-top: auto;
+    padding-top: 0.25em;
+}
+
+.bridge-mode-intro {
+    color: var(--rethink-text-muted);
+    margin-top: 0;
+}
+
+/* Platform/unsupported-model badges on the device cards - built on Materialize's own .chip
    component rather than a bespoke one. */
 .platform-badge {
     text-transform: uppercase;
@@ -216,6 +292,11 @@ a.unsupported-badge {
 
 a.unsupported-badge:hover {
     background-color: var(--rethink-unsupported-bg-hover);
+}
+
+a.unsupported-badge:focus-visible {
+    outline: 2px solid var(--rethink-accent);
+    outline-offset: 2px;
 }
 
 /* Activity log panel (see panel.js's activityConnect/appendActivityEntry, management/index.ts's
@@ -259,4 +340,20 @@ a.unsupported-badge:hover {
 
 .activity-text {
     word-break: break-word;
+}
+
+/* Narrow viewports: the fixed-width time/topic columns leave too little room for the message
+   text once the flex row can't wrap gracefully, and card padding/margins compound quickly on a
+   phone-width screen where every section is stacked. */
+@media (max-width: 480px) {
+    .activity-entry {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .container:not(.nav-wrapper) {
+        padding: 1em;
+        margin-top: 0.75em;
+        margin-bottom: 0.75em;
+    }
 }
