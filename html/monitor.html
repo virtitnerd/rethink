@@ -104,6 +104,13 @@
             .reduced_margins .input-field {
                 margin: 4px;
             }
+
+            @media (max-width: 480px) {
+                .flex_x {
+                    flex-direction: column;
+                    align-items: stretch;
+                }
+            }
         </style>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
@@ -119,7 +126,7 @@
         <nav class="light-blue lighten-1" role="navigation">
             <div class="nav-wrapper container">
                 <a id="logo-container" href="/" class="brand-logo">
-                    <span class="material-icons">psychology_alt</span>
+                    <span class="material-icons" aria-hidden="true">psychology_alt</span>
                     Rethink management panel
                 </a>
             </div>
@@ -152,14 +159,14 @@
                 &nbsp;
                 <div class="input-field">
                     <button disabled class="btn waves-effect waves-light" id="btn_send1">
-                        Send <i class="material-icons right">send</i>
+                        Send <i class="material-icons right" aria-hidden="true">send</i>
                     </button>
                 </div>
             </div>
             <div class="flex_x">
                 <div class="input-field">
                     <button disabled class="btn waves-effect waves-light" id="btn_send2">
-                        Send <i class="material-icons left">send</i>
+                        Send <i class="material-icons left" aria-hidden="true">send</i>
                     </button>
                 </div>
                 &nbsp;
