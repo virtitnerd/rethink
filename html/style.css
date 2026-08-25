@@ -91,17 +91,39 @@ body {
         sans-serif;
 }
 
+/* Materialize's own nav is a fixed 56px tall and never grows to fit its content - fine for its
+   own use case (a short one-word wordmark), broken for a real three-word title like ours.
+   Below 992px Materialize *also* switches .brand-logo to position:absolute + centered
+   (nav .brand-logo{left:50%;transform:translateX(-50%)}), so at almost any window narrower than
+   a desktop monitor - not just phones - the title can wrap, and since it's positioned outside
+   the document flow the wrapped line spills out past the bar's fixed height onto the page
+   background underneath, instead of the bar growing to contain it. Verified against
+   Materialize 1.0.0's actual CDN CSS, not guessed. Overriding back to a normal in-flow layout
+   fixes this at every width, not just one breakpoint. */
 nav {
     background: var(--rethink-nav) !important;
     box-shadow: 0 2px 8px rgba(27, 42, 74, 0.25);
+    height: auto;
+    min-height: 56px;
+}
+
+.nav-wrapper {
+    height: auto;
+    min-height: 56px;
 }
 
 nav .brand-logo {
+    position: static;
+    left: auto;
+    transform: none;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.4em;
     font-weight: 600;
+    font-size: 1.3rem;
     letter-spacing: 0.01em;
+    padding: 0.6em 0;
 }
 
 nav .brand-logo .material-icons {
