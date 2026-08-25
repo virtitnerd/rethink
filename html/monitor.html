@@ -20,7 +20,7 @@
                 flex: 1;
             }
             #messages {
-                border: solid 1px black;
+                border: solid 1px var(--rethink-border);
                 border-radius: 8px;
                 padding: 8px;
                 overflow-y: scroll;
@@ -32,7 +32,7 @@
 
             .message {
                 clear: both;
-                border: solid 1px black;
+                border: solid 1px var(--rethink-border);
                 border-radius: 4px;
                 padding: 2px 4px;
                 margin: 2px;
@@ -47,23 +47,57 @@
             .rx.message {
                 float: left;
                 background: rgb(116, 171, 203);
+                color: #0d1b24;
             }
 
             .message.injected {
                 background: #c04040;
+                color: white;
             }
 
             .message .timestamp {
-                background: #ffff80;
-                color: black;
+                background: #ffd23f;
+                color: #14181f;
                 margin: 0px 8px;
                 padding: 0px 4px;
+                border-radius: 2px;
             }
             .rx.message .timestamp {
                 float: left;
             }
             .tx.message .timestamp {
                 float: right;
+            }
+
+            .message-hex {
+                font-family: monospace;
+                font-size: 0.85em;
+            }
+
+            /* Server-decoded TLV/AABB fields (see util/packet-codec.ts / management/index.ts) -
+               omitted entirely for anything that didn't decode, so no empty box appears. */
+            .decoded {
+                margin-top: 4px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                font-size: 0.78em;
+            }
+
+            .decoded-status,
+            .decoded-field {
+                background: rgba(255, 255, 255, 0.25);
+                border-radius: 3px;
+                padding: 1px 5px;
+                font-family: monospace;
+            }
+
+            .decoded-status.ok {
+                background: rgba(80, 200, 120, 0.35);
+            }
+
+            .decoded-status.bad {
+                background: rgba(220, 80, 80, 0.45);
             }
 
             .reduced_margins .input-field {
