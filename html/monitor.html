@@ -136,6 +136,13 @@
             .monitor-controls .switch label .lever {
                 margin: 0;
             }
+
+            @media (max-width: 480px) {
+                .flex_x {
+                    flex-direction: column;
+                    align-items: stretch;
+                }
+            }
         </style>
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
         <link
@@ -149,7 +156,7 @@
         <nav class="light-blue lighten-1" role="navigation">
             <div class="nav-wrapper container">
                 <a id="logo-container" href="/" class="brand-logo">
-                    <span class="material-icons">psychology_alt</span>
+                    <span class="material-icons" aria-hidden="true">psychology_alt</span>
                     Rethink <span class="hide-on-med-and-down">management panel</span>
                 </a>
             </div>
@@ -180,14 +187,14 @@
                 &nbsp;
                 <div class="input-field">
                     <button disabled class="btn waves-effect waves-light" id="btn_send1">
-                        Send <i class="material-icons right">send</i>
+                        Send <i class="material-icons right" aria-hidden="true">send</i>
                     </button>
                 </div>
             </div>
             <div class="flex_x">
                 <div class="input-field">
                     <button disabled class="btn waves-effect waves-light" id="btn_send2">
-                        Send <i class="material-icons left">send</i>
+                        Send <i class="material-icons left" aria-hidden="true">send</i>
                     </button>
                 </div>
                 &nbsp;
