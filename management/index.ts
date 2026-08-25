@@ -2,7 +2,7 @@ import { WebSocketExpress, ExtendedWebSocket } from 'websocket-express'
 
 import path from 'path'
 import { fileURLToPath } from 'url'
-import log from '@/util/logging'
+import log, { onLog } from '@/util/logging'
 
 import HA_bridge from '@/cloud/ha_bridge'
 import { AnyDevice, DeviceManager } from '@/cloud/devmgr'
@@ -313,6 +313,46 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         }, next)
     })
 
+    // activity log - opt-in, topic-filterable feed of log() calls, for the management panel's
+    // live activity view. Unlike /device (always-on for the whole session), a client only
+    // starts receiving anything the moment it connects here and stops the instant it
+    // disconnects - nothing is broadcast to /ws by default, since an actively-bridged device
+    // can log several lines a second and most connected clients aren't watching for it.
+    const logMonitors = new Map<ExtendedWebSocket, () => void>()
+    app.ws('/logs', (req, res, next) => {
+        res.accept().then((ws) => {
+            if (shuttingDown) {
+                closeQuietly(ws)
+                return
+            }
+
+            // ?topics=HTTPS,bridge restricts the feed; omitted means everything.
+            const topicsParam = req.query?.topics
+            const topics =
+                typeof topicsParam === 'string' && topicsParam.length > 0
+                    ? new Set(
+                          topicsParam
+                              .split(',')
+                              .map((t) => t.trim())
+                              .filter(Boolean),
+                      )
+                    : undefined
+
+            const unsubscribe = onLog((ts, topic, args) => {
+                if (topics && !topics.has(topic)) return
+                safeSend(ws, JSON.stringify({ ts, topic, text: formatLogArgs(args) }))
+            })
+
+            const cleanup = () => {
+                if (!logMonitors.delete(ws)) return
+                unsubscribe()
+            }
+            logMonitors.set(ws, cleanup)
+            ws.once('close', cleanup)
+            ws.once('error', cleanup)
+        }, next)
+    })
+
     // static pages
     app.use(WebSocketExpress.static(currentDir + '/../html', { extensions: ['html'] }))
     const server = app.createServer()
@@ -328,6 +368,11 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             closeQuietly(monitor)
         }
         deviceMonitors.clear()
+        for (const [monitor, cleanup] of logMonitors) {
+            cleanup()
+            closeQuietly(monitor)
+        }
+        logMonitors.clear()
     }
 
     const close = server.close.bind(server)
@@ -337,6 +382,19 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     }) as typeof server.close
     server.once('close', dispose)
     return server
+}
+
+function formatLogArgs(args: unknown[]): string {
+    return args
+        .map((a) => {
+            if (typeof a === 'string') return a
+            try {
+                return JSON.stringify(a)
+            } catch {
+                return String(a)
+            }
+        })
+        .join(' ')
 }
 
 function asyncHandler(handler: (req: Request, res: Response) => Promise<any>) {
