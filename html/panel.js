@@ -38,13 +38,14 @@ class DeviceEntry {
     constructor(id, remoteState, parent) {
         this.id = id
         this.remoteState = remoteState
-        this.row = document.createElement('tr')
+        this.card = document.createElement('div')
+        this.card.className = 'device-card'
         this.updateDom()
-        parent.appendChild(this.row)
+        parent.appendChild(this.card)
     }
 
     destroy() {
-        this.row.remove()
+        this.card.remove()
     }
 
     update(remoteState) {
@@ -55,15 +56,25 @@ class DeviceEntry {
     updateDom() {
         const children = []
 
-        let td
-        td = document.createElement('td')
-        td.innerText = this.id
-        children.push(td)
-
-        td = document.createElement('td')
+        const header = document.createElement('div')
+        header.className = 'device-card-header'
+        const modelSpan = document.createElement('span')
+        modelSpan.className = 'device-card-model'
         // Built with DOM APIs rather than string concatenation on purpose: this.remoteState.model
         // is a modelId reported by the device itself, not something to trust as HTML.
-        td.appendChild(document.createTextNode(this.remoteState.model))
+        modelSpan.appendChild(document.createTextNode(this.remoteState.model))
+        header.appendChild(modelSpan)
+        const platformBadge = document.createElement('span')
+        platformBadge.className = `chip platform-badge platform-${this.remoteState.platform}`
+        platformBadge.textContent = this.remoteState.platform === 'thinq1' ? 'ThinQ1' : 'ThinQ2'
+        header.appendChild(platformBadge)
+        children.push(header)
+
+        const idRow = document.createElement('div')
+        idRow.className = 'device-card-id'
+        idRow.textContent = this.id
+        children.push(idRow)
+
         if (!this.remoteState.mapped) {
             const badge = document.createElement('a')
             badge.className = 'chip unsupported-badge tooltipped'
@@ -73,27 +84,37 @@ class DeviceEntry {
             badge.setAttribute('data-position', 'bottom')
             badge.setAttribute('data-tooltip', 'Not mapped to Home Assistant yet - click to see how to add support')
             badge.textContent = 'unsupported'
-            td.appendChild(document.createTextNode(' '))
-            td.appendChild(badge)
+            children.push(badge)
         }
-        children.push(td)
 
-        td = document.createElement('td')
-        const platformBadge = document.createElement('span')
-        platformBadge.className = `chip platform-badge platform-${this.remoteState.platform}`
-        platformBadge.textContent = this.remoteState.platform === 'thinq1' ? 'ThinQ1' : 'ThinQ2'
-        td.appendChild(platformBadge)
-        children.push(td)
+        const footer = document.createElement('div')
+        footer.className = 'device-card-footer'
 
-        td = document.createElement('td')
-        td.style = 'width: 10em'
+        const switchDiv = document.createElement('div')
+        switchDiv.className = 'switch'
+        const switchLabel = document.createElement('label')
+        switchLabel.appendChild(document.createTextNode('Off '))
+        const switchInput = document.createElement('input')
+        switchInput.type = 'checkbox'
+        // The visible "Off ... On" text either side of the switch is decorative padding, not a
+        // real description - a screen reader needs its own label naming which device this is.
+        switchInput.setAttribute('aria-label', `Bridge mode for ${this.remoteState.model}`)
+        switchLabel.appendChild(switchInput)
+        const lever = document.createElement('span')
+        lever.className = 'lever'
+        switchLabel.appendChild(lever)
+        switchLabel.appendChild(document.createTextNode('On'))
+        switchDiv.appendChild(switchLabel)
+        footer.appendChild(switchDiv)
 
-        td.innerHTML = `
-            <div class="switch">
-                <label>Off <input type="checkbox"> <span class="lever"></span>On</label>
-            </div>
-            <div class="hide preloader-wrapper verysmall active">
-                <div class="spinner-layer spinner-green-only">
+        const spinnerWrap = document.createElement('div')
+        spinnerWrap.className = 'hide preloader-wrapper verysmall active'
+        spinnerWrap.setAttribute('role', 'status')
+        spinnerWrap.setAttribute('aria-label', 'Updating bridge status')
+        // Static, developer-authored markup - Materialize's spinner requires this exact nested
+        // structure, there's nothing device-controlled in it.
+        spinnerWrap.innerHTML = `
+            <div class="spinner-layer spinner-green-only">
                 <div class="circle-clipper left">
                     <div class="circle"></div>
                 </div><div class="gap-patch">
@@ -101,13 +122,12 @@ class DeviceEntry {
                 </div><div class="circle-clipper right">
                     <div class="circle"></div>
                 </div>
-                </div>
             </div>`
-        children.push(td)
+        footer.appendChild(spinnerWrap)
 
-        this.bridgeSwitch = td.getElementsByTagName('input')[0]
-        this.bridgeDiv = td.getElementsByClassName('switch')[0]
-        this.spinner = td.getElementsByClassName('preloader-wrapper')[0]
+        this.bridgeSwitch = switchInput
+        this.bridgeDiv = switchDiv
+        this.spinner = spinnerWrap
 
         const startBridge = async (deviceType) => {
             this.bridgeBusy = true
@@ -153,27 +173,30 @@ class DeviceEntry {
             }
         }
 
-        td = document.createElement('td')
         const monitorLink = document.createElement('a')
         monitorLink.className = 'btn waves-effect waves-light tooltipped'
         monitorLink.href = `monitor?id=${encodeURIComponent(this.id)}`
         monitorLink.setAttribute('data-position', 'left')
         monitorLink.setAttribute('data-tooltip', 'Live packet monitor')
+        // The tooltip above is visual only - it isn't guaranteed to reach a screen reader, so the
+        // icon-only link needs its own accessible name.
+        monitorLink.setAttribute('aria-label', `Open packet monitor for ${this.remoteState.model}`)
         const monitorIcon = document.createElement('i')
         monitorIcon.className = 'material-icons'
+        monitorIcon.setAttribute('aria-hidden', 'true')
         monitorIcon.textContent = 'troubleshoot'
         monitorLink.appendChild(monitorIcon)
-        td.appendChild(monitorLink)
-        children.push(td)
+        footer.appendChild(monitorLink)
+        children.push(footer)
 
-        this.row.replaceChildren(...children)
-        Array.from(this.row.getElementsByClassName('tooltipped')).forEach((e) => M.Tooltip.init(e))
+        this.card.replaceChildren(...children)
+        Array.from(this.card.getElementsByClassName('tooltipped')).forEach((e) => M.Tooltip.init(e))
 
         // The markup above is rebuilt from scratch, so the switch comes back unchecked and the
-        // spinner comes back visible. Nothing else re-applies the row's actual state: a plain
+        // spinner comes back visible. Nothing else re-applies the card's actual state: a plain
         // {devices} broadcast - which is what enabling a bridge, or any appliance connecting or
-        // dropping, sends - never reaches the branch that refreshes every row. Without this the
-        // whole table reads as "all bridges off" until the page is reloaded.
+        // dropping, sends - never reaches the branch that refreshes every card. Without this every
+        // card reads as "all bridges off" until the page is reloaded.
         this.refreshUI()
     }
 

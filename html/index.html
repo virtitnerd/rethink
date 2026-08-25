@@ -32,7 +32,7 @@
         <nav class="light-blue lighten-1" role="navigation">
             <div class="nav-wrapper container">
                 <a id="logo-container" href="#" class="brand-logo">
-                    <span class="material-icons">psychology_alt</span>
+                    <span class="material-icons" aria-hidden="true">psychology_alt</span>
                     Rethink management panel
                 </a>
             </div>
@@ -45,19 +45,7 @@
 
         <div class="container hide-when-offline">
             <h4 class="header orange-text">Connected devices<span id="devices_count" class="device-count"></span></h4>
-            <table class="highlight">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Model</th>
-                        <th>Platform</th>
-                        <th>Bridge</th>
-                        <th>Monitor</th>
-                    </tr>
-                </thead>
-
-                <tbody id="devices_body"></tbody>
-            </table>
+            <div id="devices_body" class="device-grid"></div>
             <p id="devices_empty" class="devices-empty hide">
                 No devices connected yet - follow the
                 <a
@@ -78,6 +66,10 @@
 
         <div class="container hide-when-offline">
             <h4 class="header orange-text">Bridge mode</h4>
+            <p class="bridge-mode-intro">
+                Bridge mode registers your devices with LG's own cloud too, so the official LG app keeps working side by
+                side with Home Assistant. It's optional - skip this if you only need local control.
+            </p>
             <span id="status_bridge" class="status_field"></span>Status: <span id="status_bridge_text"></span
             ><br /><br />
             <button
@@ -85,7 +77,7 @@
                 class="hide btn waves-effect waves-light modal-trigger"
                 data-target="thinq_login"
             >
-                Log into your LG account <i class="material-icons right">login</i>
+                Log into your LG account <i class="material-icons right" aria-hidden="true">login</i>
             </button>
             <button
                 id="btn_thinq_logout"
@@ -94,7 +86,7 @@
                 data-position="bottom"
                 data-tooltip="This will disable bridge mode for all your devices."
             >
-                logout<i class="material-icons right">logout</i>
+                logout<i class="material-icons right" aria-hidden="true">logout</i>
             </button>
         </div>
 
@@ -133,8 +125,10 @@
                                     maxlength="2"
                                     pattern="[A-Za-z]{2}"
                                     required
+                                    aria-describedby="country_code_hint"
                                 />
                                 <label for="country_code">Country code</label>
+                                <span id="country_code_hint" class="helper-text">e.g. US, GB, DE</span>
                             </div>
                             <div class="input-field col s3">
                                 <button
@@ -142,7 +136,7 @@
                                     class="btn waves-effect waves-light"
                                     id="btn_thinq_login_continue"
                                 >
-                                    Log in <i class="material-icons right">login</i>
+                                    Log in <i class="material-icons right" aria-hidden="true">login</i>
                                 </button>
                             </div>
                         </div>
@@ -179,7 +173,7 @@
                 <h4>Logout confirmation</h4>
                 <p>Logging out will disable bridge mode for all your devices.</p>
                 <button class="btn waves-effect waves-light" id="btn_thinq_logout_continue">
-                    Log out <i class="material-icons right">logout</i>
+                    Log out <i class="material-icons right" aria-hidden="true">logout</i>
                 </button>
             </div>
             <div class="modal-footer">
