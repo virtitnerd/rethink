@@ -18,12 +18,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
 let ws
 let reconnectTimer
-const STATUS_OK = `<i class="tiny material-icons green-text">check</i>`
-const STATUS_ERROR = `<i class="tiny material-icons red-text">error</i>`
-const STATUS_UNKNOWN = `<i class="tiny material-icons red-text">question_mark</i>`
+// role="img" + aria-label give these icons an accessible name of their own - unlike every other
+// material-icons use in this file, none of these sit next to their own visible text (the
+// adjacent "Browser <-> Rethink" etc. is a separate sibling text node describing the whole row,
+// not this icon specifically).
+const STATUS_OK = `<i class="tiny material-icons green-text" role="img" aria-label="Connected">check</i>`
+const STATUS_ERROR = `<i class="tiny material-icons red-text" role="img" aria-label="Error">error</i>`
+const STATUS_UNKNOWN = `<i class="tiny material-icons red-text" role="img" aria-label="Unknown">question_mark</i>`
 // A cloud, not a check: this is the state of the link out to LG, not of the appliance or of rethink.
-const BRIDGE_ONLINE = `<i class="tiny material-icons green-text">cloud_done</i>`
-const BRIDGE_OFFLINE = `<i class="tiny material-icons red-text">cloud_off</i>`
+const BRIDGE_ONLINE = `<i class="tiny material-icons green-text" role="img" aria-label="Connected to LG cloud">cloud_done</i>`
+const BRIDGE_OFFLINE = `<i class="tiny material-icons red-text" role="img" aria-label="Not connected to LG cloud">cloud_off</i>`
 let bridge_status = false
 
 get('status_rethink').innerHTML = STATUS_UNKNOWN
@@ -463,6 +467,7 @@ function setActivityToggleLabel() {
     btn.replaceChildren()
     const icon = document.createElement('i')
     icon.className = 'material-icons left'
+    icon.setAttribute('aria-hidden', 'true')
     icon.textContent = activityOpen ? 'expand_less' : 'expand_more'
     btn.appendChild(icon)
     btn.appendChild(document.createTextNode(activityOpen ? 'Hide' : 'Show'))
