@@ -12,6 +12,56 @@
     --rethink-text: #1f2933;
     --rethink-text-muted: #6b7787;
     --rethink-border: #e2e6ea;
+    --rethink-thinq1-bg: #e4ecff;
+    --rethink-thinq1-text: #2a4d8f;
+    --rethink-thinq2-bg: #e6f4ea;
+    --rethink-thinq2-text: #1e6b3a;
+    --rethink-unsupported-bg: #fdece0;
+    --rethink-unsupported-bg-hover: #fbdcc2;
+    color-scheme: light;
+}
+
+/* Follows the OS/browser preference automatically - no manual toggle (yet). Materialize
+   itself hardcodes several component backgrounds (modal, dropdown/autocomplete) rather than
+   using CSS custom properties, so those need explicit selector overrides below rather than
+   just new token values - confirmed against Materialize 1.0.0's actual source
+   (.modal/.modal-footer #fafafa, .dropdown-content #fff, li:hover/.active #eee). */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --rethink-bg: #14181f;
+        --rethink-surface: #1c222c;
+        --rethink-nav: #10151d;
+        --rethink-accent: #ffb066;
+        --rethink-accent-dark: #ffa354;
+        --rethink-text: #e4e7ec;
+        --rethink-text-muted: #93a0b3;
+        --rethink-border: #2a3240;
+        --rethink-thinq1-bg: #1c2a4a;
+        --rethink-thinq1-text: #9db8f5;
+        --rethink-thinq2-bg: #1a3324;
+        --rethink-thinq2-text: #7fcf9a;
+        --rethink-unsupported-bg: #3a2a1a;
+        --rethink-unsupported-bg-hover: #4a3722;
+        color-scheme: dark;
+    }
+
+    .modal,
+    .modal .modal-footer {
+        background-color: var(--rethink-surface);
+    }
+
+    .dropdown-content {
+        background-color: var(--rethink-surface);
+    }
+
+    .dropdown-content li:hover,
+    .dropdown-content li.active {
+        background-color: var(--rethink-border);
+    }
+
+    .input-field input[type='text']:not(.valid) {
+        border-bottom-color: var(--rethink-border);
+    }
 }
 
 body {
@@ -148,22 +198,22 @@ table.highlight tbody tr:hover {
 }
 
 .platform-badge.platform-thinq1 {
-    background-color: #e4ecff;
-    color: #2a4d8f;
+    background-color: var(--rethink-thinq1-bg);
+    color: var(--rethink-thinq1-text);
 }
 
 .platform-badge.platform-thinq2 {
-    background-color: #e6f4ea;
-    color: #1e6b3a;
+    background-color: var(--rethink-thinq2-bg);
+    color: var(--rethink-thinq2-text);
 }
 
 a.unsupported-badge {
-    background-color: #fdece0;
+    background-color: var(--rethink-unsupported-bg);
     color: var(--rethink-accent-dark);
     cursor: pointer;
     text-decoration: none;
 }
 
 a.unsupported-badge:hover {
-    background-color: #fbdcc2;
+    background-color: var(--rethink-unsupported-bg-hover);
 }
