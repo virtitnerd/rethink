@@ -10,6 +10,7 @@ import { Bridge } from '@/bridge'
 import { Request, Response } from 'express'
 import { Device as T1Device } from '@/cloud/thinq1/device'
 import { Device as T2Device } from '@/cloud/thinq2/device'
+import { decodePacket } from '@/util/packet-codec'
 
 export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | undefined) {
     const app = new WebSocketExpress()
@@ -207,14 +208,29 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             }
             let injectFlag = false
             let device: AnyDevice | undefined
+
+            // decodePacket() never throws (unrecognized framing comes back as protocol:'unknown',
+            // not an exception) and is already used by rethink-capture.ts/mcp-server.ts for the
+            // exact same job - reused here so the monitor page can show decoded TLV/AABB fields
+            // instead of raw hex, without needing to duplicate the decoding logic in the browser.
+            // Only forwarded when decoding actually succeeded, to keep ThinQ1's own non-framed
+            // status bytes (and anything else unrecognized) from cluttering the wire with a
+            // 'decoded: {protocol: "unknown"}' the frontend would just discard anyway.
+            function decodedOrUndefined(hex: string) {
+                const decoded = decodePacket(hex)
+                return decoded.protocol === 'unknown' ? undefined : decoded
+            }
+
             const onDeviceRx = (arg: Buffer) => {
-                safeSend(ws, JSON.stringify({ rx: arg.toString('hex'), injected: injectFlag }))
+                const hex = arg.toString('hex')
+                safeSend(ws, JSON.stringify({ rx: hex, injected: injectFlag, decoded: decodedOrUndefined(hex) }))
             }
 
             const onDeviceTx = (arg: Buffer | object) => {
-                if (Buffer.isBuffer(arg))
-                    safeSend(ws, JSON.stringify({ tx: arg.toString('hex'), injected: injectFlag }))
-                else safeSend(ws, JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag }))
+                if (Buffer.isBuffer(arg)) {
+                    const hex = arg.toString('hex')
+                    safeSend(ws, JSON.stringify({ tx: hex, injected: injectFlag, decoded: decodedOrUndefined(hex) }))
+                } else safeSend(ws, JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag }))
             }
 
             const checkDevicePresence = () => {
