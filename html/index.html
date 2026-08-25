@@ -39,8 +39,8 @@
         </nav>
         <div class="container">
             <h4 class="header orange-text">Connectivity</h4>
-            <span id="status_rethink" class="status_field"></span>Browser 🡘 Rethink<br />
-            <span id="status_mqtt" class="status_field"></span>Rethink 🡘 MQTT<br />
+            <span id="status_rethink" class="status_field" role="status"></span>Browser 🡘 Rethink<br />
+            <span id="status_mqtt" class="status_field" role="status"></span>Rethink 🡘 MQTT<br />
         </div>
 
         <div class="container hide-when-offline">
@@ -70,8 +70,8 @@
                 Bridge mode registers your devices with LG's own cloud too, so the official LG app keeps working side by
                 side with Home Assistant. It's optional - skip this if you only need local control.
             </p>
-            <span id="status_bridge" class="status_field"></span>Status: <span id="status_bridge_text"></span
-            ><br /><br />
+            <span id="status_bridge" class="status_field" role="status"></span>Status:
+            <span id="status_bridge_text" role="status"></span><br /><br />
             <button
                 id="btn_thinq_login"
                 class="hide btn waves-effect waves-light modal-trigger"
