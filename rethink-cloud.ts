@@ -81,7 +81,7 @@ function t1setup(manager: DeviceManager) {
     // Thinq1 HTTPS server
     const app = express()
     app.use(function (req, res, next) {
-        log('HTTPS', req.hostname, req.url)
+        log('HTTPS', req.method, req.hostname, req.url)
         next()
     })
 
@@ -110,7 +110,7 @@ function t2setup(manager: DeviceManager) {
     app.use(express.json())
 
     app.use(function (req, res, next) {
-        log('HTTPS', req.hostname, req.url)
+        log('HTTPS', req.method, req.hostname, req.url)
         next()
     })
 
