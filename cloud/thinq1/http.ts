@@ -223,15 +223,28 @@ export function routes(
     })
 
     router.post('/lgehadm/api/Rtos/WasherCourseDownloadSvc', async (req, res) => {
-        // The app sends {contents:"course", selectedCd:<catalog code>} - a lookup, not the
-        // actual course data. Real content lives on LG's own course-catalog backend, which we
-        // don't have; proxy to it while actively bridged so the app gets a real answer instead
-        // of the empty ack that was producing "Cycle failed to download." Cross-check the real
-        // response against modelJson's ControlWifi.action.CourseDownload (tag: COURSE/ID/DATA)
-        // once captured - it may turn out to be derivable from our own SMART_COURSE table
-        // instead of genuinely per-account content, which would let us serve it locally too.
+        // selectedCd is the course reference code the device already got from the app over
+        // the persistent socket (InfoAlarm/CmdOpt:Course, base64 XML) - not raw course data,
+        // a lookup against LG's real course-catalog backend. Proxy to it while actively
+        // bridged; confirmed live to return a real downUrl (aic.lgthinq.com, a different,
+        // non-DNS-rewritten host, so the actual content fetch happens directly against real
+        // LG rather than through rethink) followed by the device hitting
+        // CourseDownloadCompleteSvc below - a full real SmartCourse download.
         const deviceId = req.header('x-lgedm-deviceid')
         log('HTTPS', `WasherCourseDownloadSvc ${deviceId}: ${JSON.stringify(req.body)}`)
+
+        const proxied = await proxyToLG(getActiveHttpServer, deviceId, req)
+        res.header('Content-type: text/xml;charset=utf-8')
+        res.end(proxied ?? XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
+    })
+
+    router.post('/lgehadm/api/Rtos/CourseDownloadCompleteSvc', async (req, res) => {
+        // Sent once the device finishes fetching the real course content from the downUrl
+        // WasherCourseDownloadSvc handed back (workId matches that call's selectedCd) - an ack
+        // that the download completed, not a data transfer itself. First seen via the generic
+        // catch-all below; promoted to a named handler now that it's understood.
+        const deviceId = req.header('x-lgedm-deviceid')
+        log('HTTPS', `CourseDownloadCompleteSvc ${deviceId}: ${JSON.stringify(req.body)}`)
 
         const proxied = await proxyToLG(getActiveHttpServer, deviceId, req)
         res.header('Content-type: text/xml;charset=utf-8')
