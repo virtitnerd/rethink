@@ -13,6 +13,7 @@ import { Device as T1Device } from '@/cloud/thinq1/device'
 import { Device as T2Device } from '@/cloud/thinq2/device'
 import { MessageBody, statusMessage } from '@/cloud/thinq1/rti'
 import { ClipPayload, rxPacket, txPacket } from '@/cloud/thinq2/clip'
+import { decodePacket } from '@/util/packet-codec'
 
 // refresh bridged device names policy:
 // - only if a websocket subscriber is connected
@@ -273,8 +274,16 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             // The monitor's clients (html/monitor.js, tools/) expect:
             // - rx: the binary payload as hex
             // - tx: ThinQ1 - the message body as a JSON string; ThinQ2 - the binary payload as hex
-            const sendPayload = (payload: object) => {
-                safeSend(ws, JSON.stringify({ type: 'packet', ...payload, injected: injectFlag }))
+            // Framed TLV/AABB payloads also carry their decoded fields; anything unrecognized is sent as hex only.
+            const decodedFields = (hex: string | undefined) => {
+                if (!hex || !/^[0-9a-f]+$/i.test(hex)) return undefined
+                const decoded = decodePacket(hex)
+                return decoded.protocol === 'unknown' ? undefined : decoded
+            }
+
+            const sendPayload = (payload: { rx?: string; tx?: string; type?: string }) => {
+                const decoded = decodedFields(payload.rx ?? payload.tx)
+                safeSend(ws, JSON.stringify({ type: 'packet', ...payload, injected: injectFlag, decoded }))
             }
 
             const onDeviceRxT1 = ({ Format, Data }: MessageBody) => {
