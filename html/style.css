@@ -241,59 +241,14 @@ table.highlight tbody tr:hover {
     color: var(--rethink-text-muted);
 }
 
-/* Device cards - replaces the old table. A grid reflows to a single column on narrow
-   viewports on its own (auto-fill collapses once nothing fits two-up), so no extra media
-   query is needed here for that part. */
-.device-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 1em;
-}
-
-.device-card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5em;
-    border: 1px solid var(--rethink-border);
-    border-radius: 8px;
-    padding: 1em;
-}
-
-.device-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5em;
-    flex-wrap: wrap;
-}
-
-.device-card-model {
-    font-weight: 600;
-}
-
-.device-card-id {
-    color: var(--rethink-text-muted);
-    font-size: 0.78em;
-    font-family: monospace;
-    word-break: break-all;
-}
-
-.device-card-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5em;
-    margin-top: auto;
-    padding-top: 0.25em;
-}
-
 .bridge-mode-intro {
     color: var(--rethink-text-muted);
     margin-top: 0;
 }
 
-/* Platform/unsupported-model badges on the device cards - built on Materialize's own .chip
-   component rather than a bespoke one. */
+/* Platform/unsupported-model badges on the device list - built on Materialize's own .chip
+   component rather than a bespoke one. Layout (table vs. card, breakpoint grid) lives in
+   index.html's own inline stylesheet alongside the #devices_table rules it styles. */
 .platform-badge {
     text-transform: uppercase;
     font-size: 0.7rem;
