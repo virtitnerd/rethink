@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import DUT from '@/cloud/devices/F3L2CNV4W_WIFI'
+import DUT, { synthesizeSmartCourseDownload } from '@/cloud/devices/F3L2CNV4W_WIFI'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq1Device, buf } from '@/tests/helpers/mocks'
 
@@ -217,7 +217,9 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 65)
         assert.equal(props.error, 'OFF')
         assert.equal(props.op_course, 'Normal')
-        assert.equal(props.smart_course, '0')
+        // '-' not '0': smart_course is now a select entity, whose state must be one of its
+        // declared options - 0 (nothing downloaded) isn't a real SmartCourse id.
+        assert.equal(props.smart_course, '-')
         assert.equal(props.initial_bit, 'OFF')
         assert.equal(props.option3_raw, 0)
         assert.equal(props.extra_rinse, 'OFF')
@@ -344,6 +346,91 @@ describe(MODEL_ID, () => {
         dev.setProperty('remote_start_button', '')
         const sent = thinq.sent[0] as { Data: string }
         // Heavy Duty (id 4): Soil=5, SpinSpeed=5, WaterTemp=4, OPCourse=7
+        assert.deepEqual(
+            [...Buffer.from(sent.Data, 'base64')],
+            [4, 5, 5, 4, 0, 0, 0, 0, 0, 0x20, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+    })
+
+    test('synthesizeSmartCourseDownload reproduces a real captured course download byte-for-byte', () => {
+        // Real capture: downloading SmartCourse 51 (Small Load) returned
+        // <COURSE><ID>51</ID><DATA>CgMFBAAAAAAAAA8zAAAAAAAAAAAA</DATA></COURSE> from LG's own
+        // course-catalog backend. Confirms the modelJson-derived SMART_COURSE_DEFAULTS table
+        // and encodeCourse's initial:false path produce byte-identical output to the real
+        // downloaded payload, with no LG dependency at all.
+        const result = synthesizeSmartCourseDownload('51')
+        assert.equal(
+            result?.body.toString('utf-8'),
+            '<COURSE><ID>51</ID><DATA>CgMFBAAAAAAAAA8zAAAAAAAAAAAA</DATA></COURSE>',
+        )
+    })
+
+    test('synthesizeSmartCourseDownload returns undefined for unknown or non-numeric ids', () => {
+        // Real LG-issued course ids are opaque work-order strings (e.g. "WA0825015207219156")
+        // - must never accidentally match a locally-synthesizable numeric SmartCourse id.
+        assert.equal(synthesizeSmartCourseDownload('99999'), undefined)
+        assert.equal(synthesizeSmartCourseDownload('WA0825015207219156'), undefined)
+    })
+
+    test('smart_course sends InfoAlarm/CmdOpt:Course for the picked SmartCourse', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('smart_course', 'Small Load')
+
+        assert.equal(thinq.sent.length, 1)
+        const sent = thinq.sent[0] as { Cmd: string; CmdOpt: string; Format: string; Data: string }
+        assert.equal(sent.Cmd, 'InfoAlarm')
+        assert.equal(sent.CmdOpt, 'Course')
+        assert.equal(sent.Format, 'B64')
+        // id 51 (Small Load), matching the real captured InfoAlarm shape (its own real
+        // work-order id doubled the same way: "<id>/<id>").
+        assert.equal(
+            Buffer.from(sent.Data, 'base64').toString('utf-8'),
+            '<?xml version="1.0" encoding="UTF-8"?><lgenotify><item><message lang="KO">51/51</message></item></lgenotify>',
+        )
+    })
+
+    test("smart_course doesn't optimistically publish - state waits for a real confirming frame", () => {
+        const { ha, dev } = makeDevice()
+        dev.setProperty('smart_course', 'Small Load')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, undefined)
+    })
+
+    test('smart_course re-picking the already-resident course is a no-op (no redundant download)', () => {
+        const { ha, thinq, dev } = makeDevice()
+        // byte 20 (smartCourse) is 0x6a = 106 - Econo Wash
+        thinq.emit('data', SAMPLE_STATE_REAL_MIDCYCLE_COURSEINFO)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Econo Wash')
+
+        thinq.resetRecorder()
+        dev.setProperty('smart_course', 'Econo Wash') // already resident - no download needed
+        assert.deepEqual(thinq.sent, [])
+    })
+
+    test('remote_start_button uses the SmartCourse encoding after a SmartCourse pick, not the AP-course one', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course', 'Small Load')
+        thinq.resetRecorder()
+        dev.setProperty('remote_start_button', '')
+
+        const sent = thinq.sent[0] as { Data: string }
+        // APCourse=10 (SmartCourse sentinel), Soil=3/SpinSpeed=5/WaterTemp=4, InitialBit set
+        // (this does start a cycle, unlike the download trigger above), OPCourse=15,
+        // SmartCourse=51.
+        assert.deepEqual(
+            [...Buffer.from(sent.Data, 'base64')],
+            [10, 3, 5, 4, 0, 0, 0, 0, 0, 0x20, 15, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+    })
+
+    test('course_selection after a SmartCourse pick reverts remote_start_button to the AP-course encoding', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course', 'Small Load')
+        dev.setProperty('course_selection', 'Heavy Duty') // should clear the pending SmartCourse pick
+        thinq.resetRecorder()
+        dev.setProperty('remote_start_button', '')
+
+        const sent = thinq.sent[0] as { Data: string }
         assert.deepEqual(
             [...Buffer.from(sent.Data, 'base64')],
             [4, 5, 5, 4, 0, 0, 0, 0, 0, 0x20, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],

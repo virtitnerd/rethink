@@ -84,10 +84,16 @@ function t1setup(manager: DeviceManager) {
     })
 
     app.use(
-        thinq1Routes(config, (deviceId, diagMonType, decoded) => {
-            const dev = manager.allDevices[deviceId]
-            if (dev instanceof T1Device) dev.emit('diagmon', diagMonType, decoded)
-        }),
+        thinq1Routes(
+            config,
+            (deviceId, diagMonType, decoded) => {
+                const dev = manager.allDevices[deviceId]
+                if (dev instanceof T1Device) dev.emit('diagmon', diagMonType, decoded)
+            },
+            // bridge is assigned after t1setup() runs, but this only executes later, on
+            // an actual request - by then it's set (if bridging is enabled at all).
+            (deviceId) => bridge?.activeHttpServer(deviceId),
+        ),
     )
 
     // fallback

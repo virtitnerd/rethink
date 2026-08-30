@@ -17,9 +17,8 @@ import { Metadata } from '../thinq'
 // pattern, cross-confirmed by the modelJson's ControlWifi.action entries.
 // OperationStart's course-parameter array encoding (courseId/Soil/SpinSpeed/WaterTemp/../
 // OPCourse as one byte each, base64) is confirmed against a real captured command from this
-// device (2026-08-22, Normal course) — see the test file — and independently cross-checked
-// against ha-smartthinq-sensors' ThinQ1 v1 command builder, which already drives this exact
-// model.
+// device (see the test file), and independently cross-checked against
+// ha-smartthinq-sensors' ThinQ1 v1 command builder, which already drives this exact model.
 // Remote power-ON is NOT implemented: the modelJson defines no PowerOn action at all for
 // this model (the physical dial is presumably the only way to arm remote start).
 //
@@ -27,15 +26,14 @@ import { Metadata } from '../thinq'
 // entirely: HTTP diagmon reports (cloud/thinq1/http.ts), not the persistent :47878 status
 // socket this class otherwise reads from. See the thinq.on('diagmon', ...) handler below.
 //
-// course_selection only offers the 9 physical-dial AP courses, not the 16 SmartCourse ones.
-// Confirmed live (2026-08-22): starting "Small Load" (id 51) via OperationStart applied our
-// requested Soil/SpinSpeed/WaterTemp, but the machine kept reporting SmartCourse/OPCourse
-// identity for whatever was actually resident (a previously app-downloaded course), not id 51.
-// So OperationStart's SmartCourse field isn't a live selector - the machine only ever runs the
-// one SmartCourse actually downloaded onto it, and offering the other 15 as if they were
-// startable was misleading. Real download appears to be a separate, still-unimplemented
-// command (modelJson's ControlWifi.action.CourseDownload). SMART_COURSE below stays as a
-// read-only reflection of whatever's actually resident.
+// course_selection only offers the 9 physical-dial AP courses, not the 16 SmartCourse ones:
+// starting one via OperationStart applies the requested Soil/SpinSpeed/WaterTemp, but the
+// machine keeps reporting SmartCourse/OPCourse identity for whatever's actually resident
+// (a downloaded course), not the id requested - OperationStart's SmartCourse field isn't a
+// live selector, the machine only ever runs whatever's been downloaded onto it. smart_course
+// is a select instead: it shows the actually-resident course and triggers a real download
+// (see synthesizeSmartCourseDownload below and cloud/thinq1/http.ts's
+// WasherCourseDownloadSvc) the moment a different one is picked.
 
 const STATES: Record<number, string> = {
     0: 'Off',
@@ -229,14 +227,19 @@ const SMART_COURSE: Record<number, string> = {
 // without it the machine never actually started.
 const INITIAL_BIT = 0x20 // Option3 bit 5
 
+// initial defaults to true (OperationStart's own use, which must always set InitialBit to
+// actually start a cycle) but a real downloaded SmartCourse's own DATA field does NOT have
+// it set (confirmed against a real capture: it's just defining the course, not starting
+// one) - see synthesizeSmartCourseDownload() below, which passes initial:false.
 function encodeCourse(
     apCourse: number,
     smartCourse: number,
     d: { soil: number; spinSpeed: number; waterTemp: number; opCourse: number },
+    initial: boolean = true,
 ): string {
     // prettier-ignore
     const bytes = [
-        apCourse, d.soil, d.spinSpeed, d.waterTemp, 0, 0, 0, 0, 0, INITIAL_BIT, d.opCourse, smartCourse,
+        apCourse, d.soil, d.spinSpeed, d.waterTemp, 0, 0, 0, 0, 0, initial ? INITIAL_BIT : 0, d.opCourse, smartCourse,
         0, 0, 0, 0, 0, 0, 0, 0, 0,
     ]
     return Buffer.from(bytes).toString('base64')
@@ -249,6 +252,66 @@ function encodeCourseStart(courseId: number): string | undefined {
     if (ap) return encodeCourse(courseId, 0, ap)
 
     return undefined
+}
+
+// Every SmartCourse download uses this fixed APCourse sentinel - confirmed both via live
+// status monitoring (the machine always reports APCourse=10 whenever a SmartCourse is
+// resident, see the header comment above) and directly in modelJson, where all 16
+// SmartCourse entries have APCourse:10.
+const SMART_COURSE_AP_COURSE = 10
+
+// Soil/SpinSpeed/WaterTemp/OPCourse for each SmartCourse, straight from modelJson's own
+// SmartCourse[id].function array and OPCourse field - not guessed, and independently
+// confirmed byte-for-byte against a real downloaded course (id 51/Small Load:
+// soil=3/spinSpeed=5/waterTemp=4/opCourse=15). This lets rethink build a real, correct
+// CourseDownload payload for any of these 16 entirely locally, with no LG dependency at
+// all - see synthesizeSmartCourseDownload() below and cloud/thinq1/http.ts's
+// WasherCourseDownloadSvc, which serves it without ever proxying.
+const SMART_COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTemp: number; opCourse: number }> =
+    {
+        51: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 15 }, // Small Load
+        52: { soil: 3, spinSpeed: 3, waterTemp: 2, opCourse: 6 }, // Color Care
+        53: { soil: 1, spinSpeed: 3, waterTemp: 2, opCourse: 10 }, // Beachwear
+        54: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 6 }, // New Clothes
+        55: { soil: 3, spinSpeed: 3, waterTemp: 2, opCourse: 6 }, // Denim
+        59: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 10 }, // Swimwear
+        60: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Rainy Day
+        61: { soil: 1, spinSpeed: 3, waterTemp: 4, opCourse: 21 }, // Gym Clothes
+        63: { soil: 1, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Sweat Stains
+        64: { soil: 1, spinSpeed: 5, waterTemp: 6, opCourse: 12 }, // Single Garments
+        100: { soil: 3, spinSpeed: 5, waterTemp: 6, opCourse: 6 }, // Baby Clothes
+        105: { soil: 3, spinSpeed: 2, waterTemp: 4, opCourse: 6 }, // Overnight Wash
+        106: { soil: 3, spinSpeed: 5, waterTemp: 2, opCourse: 6 }, // Econo Wash
+        107: { soil: 1, spinSpeed: 2, waterTemp: 2, opCourse: 10 }, // Delicate Dresses
+        108: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Half Load Wash
+        109: { soil: 5, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Full Load Wash
+    }
+
+// Builds the exact <COURSE><ID>..</ID><DATA>..</DATA></COURSE> payload real LG's
+// courseDownload content endpoint serves for a given SmartCourse id, entirely locally -
+// called from cloud/thinq1/http.ts's WasherCourseDownloadSvc instead of proxying to LG
+// whenever courseId matches one of ours.
+export function synthesizeSmartCourseDownload(courseId: string): { contentType: string; body: Buffer } | undefined {
+    const id = Number(courseId)
+    const params = SMART_COURSE_DEFAULTS[id]
+    if (!Number.isInteger(id) || !params) return undefined
+
+    const data = encodeCourse(SMART_COURSE_AP_COURSE, id, params, false)
+    return {
+        contentType: 'text/xml;charset=utf-8',
+        body: Buffer.from(`<COURSE><ID>${id}</ID><DATA>${data}</DATA></COURSE>`),
+    }
+}
+
+// The persistent-socket message that tells the device "a course is ready to download" -
+// confirmed against a real capture: the app sends this with a real LG-issued work-order
+// id, the device echoes it back verbatim as WasherCourseDownloadSvc's selectedCd.
+// Sending it ourselves with our own id (just the SmartCourse's numeric id - the device
+// doesn't validate the id's format, only relays it) triggers the exact same download flow,
+// entirely locally.
+function encodeCourseDownloadTrigger(smartCourseId: number): string {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><lgenotify><item><message lang="KO">${smartCourseId}/${smartCourseId}</message></item></lgenotify>`
+    return Buffer.from(xml).toString('base64')
 }
 
 // Every id that's actually startable, for the course_selection select's option list and its
@@ -367,12 +430,20 @@ export default class Device extends HADevice {
                         entity_category: 'diagnostic',
                     },
                     smart_course: {
-                        platform: 'sensor',
+                        platform: 'select',
                         unique_id: '$deviceid-smart-course',
                         state_topic: '$this/smart_course',
-                        name: 'Downloaded course',
+                        command_topic: '$this/smart_course/set',
+                        // Same reasoning as course_selection: we have no evidence it's safe to
+                        // trigger a new download mid-cycle, so this stays locked to Off/Initial
+                        // like everything else that changes what's about to run.
+                        availability: [{ topic: '$this/controls_available' }],
+                        name: 'SmartCourse',
                         icon: 'mdi:cloud-download-outline',
-                        entity_category: 'diagnostic',
+                        // '-' covers smartCourse=0 (nothing downloaded yet) or any id outside
+                        // our 16-entry table, matching this file's convention for unset/unknown
+                        // numeric-enum fields (see SOIL/SPIN/TEMP/OP_COURSE).
+                        options: ['-', ...Object.values(SMART_COURSE)],
                     },
                     soil: {
                         platform: 'sensor',
@@ -637,7 +708,8 @@ export default class Device extends HADevice {
             this.publishProperty('pre_state', STATES[preState] ?? String(preState))
             this.publishProperty('course', AP_COURSE[apCourse] ?? String(apCourse))
             this.publishProperty('op_course', OP_COURSE[opCourse] ?? String(opCourse))
-            this.publishProperty('smart_course', SMART_COURSE[smartCourse] ?? String(smartCourse))
+            this.residentSmartCourseId = smartCourse
+            this.publishProperty('smart_course', SMART_COURSE[smartCourse] ?? '-')
             this.publishProperty('soil', SOIL[soil] ?? String(soil))
             this.publishProperty('spin', SPIN[spin] ?? String(spin))
             this.publishProperty('temp', TEMP[temp] ?? String(temp))
@@ -699,6 +771,14 @@ export default class Device extends HADevice {
 
     pendingCourseId = DEFAULT_COURSE_ID
     courseSelectedByUser = false
+    // Set by smart_course, cleared by course_selection - mutually exclusive with
+    // pendingCourseId's AP-course pick, since remote_start_button needs to know which of the
+    // two encodings (and which real Soil/SpinSpeed/WaterTemp) to actually send.
+    pendingSmartCourseId: number | undefined = undefined
+    // Whatever the machine actually reports as resident right now (byte 20, kept in sync by
+    // the data handler below) - used so writing the same SmartCourse that's already loaded
+    // is a no-op instead of re-triggering a real, unnecessary download.
+    residentSmartCourseId = 0
 
     publishCache: Record<string, string | number> = {}
 
@@ -724,14 +804,43 @@ export default class Device extends HADevice {
             )
             if (SELECTABLE_COURSE_NAMES[id]) {
                 this.pendingCourseId = id
+                this.pendingSmartCourseId = undefined
                 this.courseSelectedByUser = true
                 this.publishProperty('course_selection', mqttValue)
             }
         }
         if (prop === 'remote_start_button') {
-            const data = encodeCourseStart(this.pendingCourseId)
+            const data =
+                this.pendingSmartCourseId !== undefined
+                    ? encodeCourse(
+                          SMART_COURSE_AP_COURSE,
+                          this.pendingSmartCourseId,
+                          SMART_COURSE_DEFAULTS[this.pendingSmartCourseId],
+                      )
+                    : encodeCourseStart(this.pendingCourseId)
             if (data)
                 this.thinq.send({ Cmd: 'Control', CmdOpt: 'Operation', Value: 'Start', Format: 'B64', Data: data })
+        }
+        if (prop === 'smart_course') {
+            // Picking a course here both selects it (for remote_start_button, same as
+            // course_selection) and triggers a real download - a plain HA select, no
+            // separate confirm button, since download is easily reversible (just re-pick).
+            // Deliberately doesn't publishProperty optimistically: unlike course_selection's
+            // AP pick (purely local, no round-trip), a SmartCourse download is a real
+            // asynchronous exchange with the device - this stays showing the previous
+            // resident course until the data handler confirms the new one actually loaded.
+            const id = Number(Object.keys(SMART_COURSE).find((key) => SMART_COURSE[Number(key)] === mqttValue))
+            if (SMART_COURSE_DEFAULTS[id]) {
+                this.pendingSmartCourseId = id
+                if (id !== this.residentSmartCourseId) {
+                    this.thinq.send({
+                        Cmd: 'InfoAlarm',
+                        CmdOpt: 'Course',
+                        Format: 'B64',
+                        Data: encodeCourseDownloadTrigger(id),
+                    })
+                }
+            }
         }
     }
 }
