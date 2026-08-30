@@ -34,6 +34,19 @@
                 width: 10em;
             }
 
+            /* Cut off rather than wrapped, at every width - not just below the card breakpoint
+               below. A 36-character UUID with no width constraint just wraps across several
+               lines in the plain table too, dragging every row's height with it and making the
+               table look inconsistent device to device. Both cells carry the full text as a
+               title, and the monitor page shows the id in full anyway. */
+            .dev-name,
+            .dev-id {
+                max-width: 14em;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
             /*
              * The device list is the widest thing on this page, and the widest thing in it is a
              * 36-character UUID, so on a phone the whole page ends up scrolling sideways. Below the
@@ -45,6 +58,17 @@
             @media (max-width: 720px) {
                 #devices_table thead {
                     display: none;
+                }
+
+                /* display:grid on the <tr> alone leaves <table>/<tbody> as display:table/
+                   table-row-group, still running their own internal table layout algorithm
+                   around a row it no longer controls - a real, reported WebKit/Safari
+                   inconsistency, not just a Chrome-vs-Safari style difference. Freeing the
+                   ancestors too is the standard fix for "table becomes a grid of cards on
+                   narrow screens". */
+                #devices_table,
+                #devices_table tbody {
+                    display: block;
                 }
 
                 #devices_table tbody tr {
@@ -97,14 +121,12 @@
                     color: var(--rethink-text-muted);
                 }
 
-                /* Cut off rather than wrapped: a UUID broken across three lines is no more readable
-                   than a truncated one, and it drags the row's height with it. Both cells carry the
-                   full text as a title, and the monitor page shows the id in full anyway. */
+                /* max-width above is a fixed em value tuned for the wide table; inside the grid
+                   here the column is already width-constrained by minmax(0, 1fr), so let it use
+                   the space the grid actually gives it instead of a second, unrelated cap. */
                 #devices_table .dev-name,
                 #devices_table .dev-id {
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
+                    max-width: none;
                 }
 
                 /* The default button padding is wider than the icons need, and here two of them are
