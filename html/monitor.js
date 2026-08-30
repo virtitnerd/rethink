@@ -43,7 +43,7 @@ function connect() {
         if (typeof ev.data === 'string') {
             const json = JSON.parse(ev.data)
             if (json.rx) {
-                const div = pushMessage('rx', json.rx, json.injected)
+                const div = pushMessage('rx', json.rx, json.injected, json.decoded)
                 div.onclick = () => {
                     get('send2').value = json.rx
                     M.updateTextFields()
@@ -51,7 +51,7 @@ function connect() {
             }
 
             if (json.tx) {
-                const div = pushMessage('tx', json.tx, json.injected)
+                const div = pushMessage('tx', json.tx, json.injected, json.decoded)
                 div.onclick = () => {
                     get('send1').value = json.tx
                     M.updateTextFields()
@@ -92,7 +92,37 @@ window.addEventListener('pageshow', (ev) => {
     if (ev.persisted) connect()
 })
 
-function pushMessage(direction, payload, injected) {
+// decoded is the same shape util/packet-codec.ts's decodePacket() returns (see the /device
+// WS handler in management/index.ts, which decodes server-side so this file never needs its
+// own copy of the TLV/AABB parsing logic) - undefined for anything that didn't decode
+// (unrecognized framing, or a ThinQ1 JSON-style command, which was never hex to begin with).
+function renderDecoded(decoded) {
+    const box = document.createElement('div')
+    box.classList.add('decoded')
+
+    if (decoded.protocol === 'tlv') {
+        const crc = document.createElement('span')
+        crc.classList.add('decoded-status', decoded.crcOk ? 'ok' : 'bad')
+        crc.textContent = decoded.crcOk ? 'CRC ok' : 'CRC bad'
+        box.appendChild(crc)
+
+        for (const { t, v } of decoded.tlv) {
+            const item = document.createElement('span')
+            item.classList.add('decoded-field')
+            item.textContent = `t=0x${t.toString(16)} v=0x${v.toString(16)} (${v})`
+            box.appendChild(item)
+        }
+    } else if (decoded.protocol === 'aabb') {
+        const status = document.createElement('span')
+        status.classList.add('decoded-status', decoded.checksumOk ? 'ok' : 'bad')
+        status.textContent = decoded.checksumOk ? 'checksum ok' : 'checksum bad'
+        box.appendChild(status)
+    }
+
+    return box
+}
+
+function pushMessage(direction, payload, injected, decoded) {
     const timestamp = document.createElement('span')
     const messages = get('messages')
 
@@ -101,7 +131,14 @@ function pushMessage(direction, payload, injected) {
     const div = document.createElement('div')
     div.classList.add(direction, 'message')
     if (injected) div.classList.add('injected')
-    div.innerText = payload
+
+    const hex = document.createElement('div')
+    hex.classList.add('message-hex')
+    hex.textContent = payload
+    div.appendChild(hex)
+
+    if (decoded) div.appendChild(renderDecoded(decoded))
+
     div.appendChild(timestamp)
 
     messages.appendChild(div)

@@ -18,9 +18,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
 let ws
 let reconnectTimer
-const STATUS_OK = `<i class="tiny material-icons green-text">check</i>`
-const STATUS_ERROR = `<i class="tiny material-icons red-text">error</i>`
-const STATUS_UNKNOWN = `<i class="tiny material-icons red-text">question_mark</i>`
+// role="img" + aria-label give these icons an accessible name of their own - unlike every other
+// material-icons use in this file, none of these three sit next to their own visible text (the
+// adjacent "Browser <-> Rethink" etc. is a separate sibling text node describing the whole row,
+// not this icon specifically).
+const STATUS_OK = `<i class="tiny material-icons green-text" role="img" aria-label="Connected">check</i>`
+const STATUS_ERROR = `<i class="tiny material-icons red-text" role="img" aria-label="Error">error</i>`
+const STATUS_UNKNOWN = `<i class="tiny material-icons red-text" role="img" aria-label="Unknown">question_mark</i>`
 let bridge_status = false
 
 get('status_rethink').innerHTML = STATUS_UNKNOWN
@@ -72,16 +76,30 @@ class DeviceEntry {
 
         td = document.createElement('td')
         td.className = 'dev-model'
-        let model = this.remoteState.model
+        // Built with DOM APIs rather than string concatenation/innerHTML on purpose:
+        // this.remoteState.model is a modelId reported by the device itself, not something to
+        // trust as HTML.
+        td.appendChild(document.createTextNode(this.remoteState.model))
         if (!this.remoteState.mapped) {
-            model += ` <i class="material-icons tooltipped tiny" data-position="bottom" data-tooltip="This device is not supported by rethink. It will not be mapped to HomeAssistant">warning</i>`
+            const badge = document.createElement('a')
+            badge.className = 'chip unsupported-badge tooltipped'
+            badge.href = 'https://github.com/anszom/rethink/wiki/Adding-support-for-a-new-device'
+            badge.target = '_blank'
+            badge.rel = 'noopener'
+            badge.setAttribute('data-position', 'bottom')
+            badge.setAttribute('data-tooltip', 'Not mapped to Home Assistant yet - click to see how to add support')
+            badge.textContent = 'unsupported'
+            td.appendChild(document.createTextNode(' '))
+            td.appendChild(badge)
         }
-        td.innerHTML = model
         children.push(td)
 
         td = document.createElement('td')
         td.className = 'dev-platform'
-        td.innerText = this.remoteState.platform
+        const platformBadge = document.createElement('span')
+        platformBadge.className = `chip platform-badge platform-${this.remoteState.platform}`
+        platformBadge.textContent = this.remoteState.platform === 'thinq1' ? 'ThinQ1' : 'ThinQ2'
+        td.appendChild(platformBadge)
         children.push(td)
 
         // The width lives in the stylesheet now: on a narrow screen this cell moves out of the
@@ -154,20 +172,48 @@ class DeviceEntry {
         }
 
         td = document.createElement('td')
+        td.className = 'dev-actions'
+
         // Materialize disables a button with pointer-events: none, which would swallow the hover
         // that opens its tooltip - so the tooltip lives on a wrapper instead of on the button.
-        td.className = 'dev-actions'
-        td.innerHTML = `
-            <span class="tooltipped" style="display: inline-block" data-position="bottom" data-tooltip="Monitor">
-                <a class="btn waves-effect waves-light" href="monitor?id=${this.id}"><i class="material-icons">troubleshoot</i></a>
-            </span>
-            <span class="tooltipped" style="display: inline-block" data-position="bottom"
-                data-tooltip="Download the modelJSON file. Requires bridge mode.">
-                <a class="btn waves-effect waves-light"><i class="material-icons">description</i></a>
-            </span>`
+        // Built with DOM APIs (and encodeURIComponent for the id in the href) rather than a
+        // template string on purpose: this.id ultimately comes from device/cloud-reported data,
+        // not something to trust unescaped in HTML or a URL.
+        const monitorWrap = document.createElement('span')
+        monitorWrap.className = 'tooltipped'
+        monitorWrap.style.display = 'inline-block'
+        monitorWrap.setAttribute('data-position', 'bottom')
+        monitorWrap.setAttribute('data-tooltip', 'Monitor')
+        const monitorLink = document.createElement('a')
+        monitorLink.className = 'btn waves-effect waves-light'
+        monitorLink.href = `monitor?id=${encodeURIComponent(this.id)}`
+        monitorLink.setAttribute('aria-label', `Open packet monitor for ${this.remoteState.model}`)
+        const monitorIcon = document.createElement('i')
+        monitorIcon.className = 'material-icons'
+        monitorIcon.setAttribute('aria-hidden', 'true')
+        monitorIcon.textContent = 'troubleshoot'
+        monitorLink.appendChild(monitorIcon)
+        monitorWrap.appendChild(monitorLink)
+        td.appendChild(monitorWrap)
+
+        const modelJsonWrap = document.createElement('span')
+        modelJsonWrap.className = 'tooltipped'
+        modelJsonWrap.style.display = 'inline-block'
+        modelJsonWrap.setAttribute('data-position', 'bottom')
+        modelJsonWrap.setAttribute('data-tooltip', 'Download the modelJSON file. Requires bridge mode.')
+        this.modelJsonButton = document.createElement('a')
+        this.modelJsonButton.className = 'btn waves-effect waves-light'
+        this.modelJsonButton.setAttribute('aria-label', `Download modelJSON for ${this.remoteState.model}`)
+        const modelJsonIcon = document.createElement('i')
+        modelJsonIcon.className = 'material-icons'
+        modelJsonIcon.setAttribute('aria-hidden', 'true')
+        modelJsonIcon.textContent = 'description'
+        this.modelJsonButton.appendChild(modelJsonIcon)
+        modelJsonWrap.appendChild(this.modelJsonButton)
+        td.appendChild(modelJsonWrap)
+
         children.push(td)
 
-        this.modelJsonButton = td.getElementsByTagName('a')[1]
         this.modelJsonButton.onclick = () => this.downloadModelJson()
 
         this.row.replaceChildren(...children)
@@ -227,6 +273,12 @@ class DeviceEntry {
     }
 }
 
+function refreshDevicesHeader() {
+    const count = Object.keys(devices).length
+    get('devices_count').textContent = count > 0 ? ` (${count})` : ''
+    get('devices_empty').classList.toggle('hide', count > 0)
+}
+
 // The first reconnect is near-immediate and only then does it back off. A socket that closes because
 // the page went into the back/forward cache, or because rethink restarted under it, otherwise leaves
 // the panel blank - everything is behind .hide-when-offline - for the whole retry interval.
@@ -284,6 +336,8 @@ function connect() {
                 // these appliances or it says nothing about any of them.
                 const named = Object.values(devices).some((dev) => dev.remoteState.name)
                 get('devices_table').classList.toggle('no-names', !named)
+
+                refreshDevicesHeader()
             }
 
             if (typeof json.bridge === 'object') {
@@ -346,6 +400,111 @@ get('btn_thinq_logout_continue').onclick = async () => {
 window.addEventListener('pageshow', (ev) => {
     if (ev.persisted) connect() // a full load runs connect() on its own
 })
+
+// Activity log: opt-in - the /logs WS (see management/index.ts) only connects while this panel
+// is expanded, and disconnects the moment it's collapsed, since an actively-bridged device can
+// log several lines a second and most sessions aren't watching for it.
+const ACTIVITY_MAX_ENTRIES = 300
+let activityWs
+let activityOpen = false
+let activityReconnectTimer
+let activityRetryDelay = 250
+
+function activityConnect() {
+    clearTimeout(activityReconnectTimer)
+    if (activityWs) {
+        activityWs.onclose = activityWs.onopen = activityWs.onmessage = null
+        try {
+            activityWs.close()
+        } catch {}
+    }
+
+    const topics = get('activity_topics').value.trim()
+    const url = baseUrl + 'logs' + (topics ? '?topics=' + encodeURIComponent(topics) : '')
+    activityWs = new WebSocket(url)
+
+    activityWs.onopen = () => {
+        activityRetryDelay = 250
+    }
+
+    activityWs.onmessage = (ev) => {
+        if (typeof ev.data !== 'string') return
+        const json = JSON.parse(ev.data)
+        appendActivityEntry(json.ts, json.topic, json.text)
+    }
+
+    activityWs.onclose = () => {
+        if (!activityOpen) return
+        activityReconnectTimer = setTimeout(activityConnect, activityRetryDelay)
+        activityRetryDelay = Math.min(activityRetryDelay * 2, 5000)
+    }
+}
+
+function activityDisconnect() {
+    clearTimeout(activityReconnectTimer)
+    if (activityWs) {
+        activityWs.onclose = activityWs.onopen = activityWs.onmessage = null
+        try {
+            activityWs.close()
+        } catch {}
+        activityWs = undefined
+    }
+}
+
+function appendActivityEntry(ts, topic, text) {
+    const log = get('activity_log')
+    const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4
+
+    const entry = document.createElement('div')
+    entry.className = 'activity-entry'
+
+    const time = document.createElement('span')
+    time.className = 'activity-time'
+    time.textContent = new Date(ts).toLocaleTimeString()
+    entry.appendChild(time)
+
+    const topicChip = document.createElement('span')
+    topicChip.className = 'activity-topic'
+    topicChip.textContent = topic
+    entry.appendChild(topicChip)
+
+    const textSpan = document.createElement('span')
+    textSpan.className = 'activity-text'
+    textSpan.textContent = text
+    entry.appendChild(textSpan)
+
+    log.appendChild(entry)
+    while (log.children.length > ACTIVITY_MAX_ENTRIES) log.removeChild(log.firstChild)
+    if (atBottom) log.scrollTop = log.scrollHeight
+}
+
+function setActivityToggleLabel() {
+    const btn = get('btn_toggle_activity')
+    btn.replaceChildren()
+    const icon = document.createElement('i')
+    icon.className = 'material-icons left'
+    icon.setAttribute('aria-hidden', 'true')
+    icon.textContent = activityOpen ? 'expand_less' : 'expand_more'
+    btn.appendChild(icon)
+    btn.appendChild(document.createTextNode(activityOpen ? 'Hide' : 'Show'))
+}
+
+get('btn_toggle_activity').onclick = () => {
+    activityOpen = !activityOpen
+    get('activity_panel').classList.toggle('hide', !activityOpen)
+    setActivityToggleLabel()
+    if (activityOpen) activityConnect()
+    else activityDisconnect()
+}
+
+get('activity_topics').addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' || !activityOpen) return
+    ev.preventDefault()
+    get('activity_log').replaceChildren()
+    activityConnect()
+})
+
+setActivityToggleLabel()
 
 function get(id) {
     return document.getElementById(id)

@@ -2,7 +2,7 @@ import { WebSocketExpress, ExtendedWebSocket } from 'websocket-express'
 
 import path from 'path'
 import { fileURLToPath } from 'url'
-import log from '@/util/logging'
+import log, { onLog } from '@/util/logging'
 
 import HA_bridge from '@/cloud/ha_bridge'
 import { AnyDevice, DeviceManager } from '@/cloud/devmgr'
@@ -10,6 +10,7 @@ import { Bridge } from '@/bridge'
 import { Request, Response } from 'express'
 import { Device as T1Device } from '@/cloud/thinq1/device'
 import { Device as T2Device } from '@/cloud/thinq2/device'
+import { decodePacket } from '@/util/packet-codec'
 
 // refresh bridged device names policy:
 // - only if a websocket subscriber is connected
@@ -262,14 +263,29 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             }
             let injectFlag = false
             let device: AnyDevice | undefined
+
+            // decodePacket() never throws (unrecognized framing comes back as protocol:'unknown',
+            // not an exception) and is already used by rethink-capture.ts/mcp-server.ts for the
+            // exact same job - reused here so the monitor page can show decoded TLV/AABB fields
+            // instead of raw hex, without needing to duplicate the decoding logic in the browser.
+            // Only forwarded when decoding actually succeeded, to keep ThinQ1's own non-framed
+            // status bytes (and anything else unrecognized) from cluttering the wire with a
+            // 'decoded: {protocol: "unknown"}' the frontend would just discard anyway.
+            function decodedOrUndefined(hex: string) {
+                const decoded = decodePacket(hex)
+                return decoded.protocol === 'unknown' ? undefined : decoded
+            }
+
             const onDeviceRx = (arg: Buffer) => {
-                safeSend(ws, JSON.stringify({ rx: arg.toString('hex'), injected: injectFlag }))
+                const hex = arg.toString('hex')
+                safeSend(ws, JSON.stringify({ rx: hex, injected: injectFlag, decoded: decodedOrUndefined(hex) }))
             }
 
             const onDeviceTx = (arg: Buffer | object) => {
-                if (Buffer.isBuffer(arg))
-                    safeSend(ws, JSON.stringify({ tx: arg.toString('hex'), injected: injectFlag }))
-                else safeSend(ws, JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag }))
+                if (Buffer.isBuffer(arg)) {
+                    const hex = arg.toString('hex')
+                    safeSend(ws, JSON.stringify({ tx: hex, injected: injectFlag, decoded: decodedOrUndefined(hex) }))
+                } else safeSend(ws, JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag }))
             }
 
             const checkDevicePresence = () => {
@@ -352,6 +368,46 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         }, next)
     })
 
+    // activity log - opt-in, topic-filterable feed of log() calls, for the management panel's
+    // live activity view. Unlike /device (always-on for the whole session), a client only
+    // starts receiving anything the moment it connects here and stops the instant it
+    // disconnects - nothing is broadcast to /ws by default, since an actively-bridged device
+    // can log several lines a second and most connected clients aren't watching for it.
+    const logMonitors = new Map<ExtendedWebSocket, () => void>()
+    app.ws('/logs', (req, res, next) => {
+        res.accept().then((ws) => {
+            if (shuttingDown) {
+                closeQuietly(ws)
+                return
+            }
+
+            // ?topics=HTTPS,bridge restricts the feed; omitted means everything.
+            const topicsParam = req.query?.topics
+            const topics =
+                typeof topicsParam === 'string' && topicsParam.length > 0
+                    ? new Set(
+                          topicsParam
+                              .split(',')
+                              .map((t) => t.trim())
+                              .filter(Boolean),
+                      )
+                    : undefined
+
+            const unsubscribe = onLog((ts, topic, args) => {
+                if (topics && !topics.has(topic)) return
+                safeSend(ws, JSON.stringify({ ts, topic, text: formatLogArgs(args) }))
+            })
+
+            const cleanup = () => {
+                if (!logMonitors.delete(ws)) return
+                unsubscribe()
+            }
+            logMonitors.set(ws, cleanup)
+            ws.once('close', cleanup)
+            ws.once('error', cleanup)
+        }, next)
+    })
+
     // static pages
     app.use(WebSocketExpress.static(currentDir + '/../html', { extensions: ['html'] }))
     const server = app.createServer()
@@ -368,6 +424,11 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         }
         deviceMonitors.clear()
         lastSubscriberDisconnected()
+        for (const [monitor, cleanup] of logMonitors) {
+            cleanup()
+            closeQuietly(monitor)
+        }
+        logMonitors.clear()
     }
 
     const close = server.close.bind(server)
@@ -377,6 +438,19 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     }) as typeof server.close
     server.once('close', dispose)
     return server
+}
+
+function formatLogArgs(args: unknown[]): string {
+    return args
+        .map((a) => {
+            if (typeof a === 'string') return a
+            try {
+                return JSON.stringify(a)
+            } catch {
+                return String(a)
+            }
+        })
+        .join(' ')
 }
 
 function asyncHandler(handler: (req: Request, res: Response) => Promise<any>) {

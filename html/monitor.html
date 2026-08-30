@@ -2,6 +2,8 @@
 <html>
     <head>
         <meta charset="utf-8" />
+        <title>Rethink device monitor</title>
+        <link rel="icon" href="favicon.svg" type="image/svg+xml" />
         <style>
             .status_label {
                 width: 10em;
@@ -20,7 +22,7 @@
                 flex: 1;
             }
             #messages {
-                border: solid 1px black;
+                border: solid 1px var(--rethink-border);
                 border-radius: 8px;
                 padding: 8px;
                 overflow-y: scroll;
@@ -32,7 +34,7 @@
 
             .message {
                 clear: both;
-                border: solid 1px black;
+                border: solid 1px var(--rethink-border);
                 border-radius: 4px;
                 padding: 2px 4px;
                 margin: 2px;
@@ -47,23 +49,57 @@
             .rx.message {
                 float: left;
                 background: rgb(116, 171, 203);
+                color: #0d1b24;
             }
 
             .message.injected {
                 background: #c04040;
+                color: white;
             }
 
             .message .timestamp {
-                background: #ffff80;
-                color: black;
+                background: #ffd23f;
+                color: #14181f;
                 margin: 0px 8px;
                 padding: 0px 4px;
+                border-radius: 2px;
             }
             .rx.message .timestamp {
                 float: left;
             }
             .tx.message .timestamp {
                 float: right;
+            }
+
+            .message-hex {
+                font-family: monospace;
+                font-size: 0.85em;
+            }
+
+            /* Server-decoded TLV/AABB fields (see util/packet-codec.ts / management/index.ts) -
+               omitted entirely for anything that didn't decode, so no empty box appears. */
+            .decoded {
+                margin-top: 4px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                font-size: 0.78em;
+            }
+
+            .decoded-status,
+            .decoded-field {
+                background: rgba(255, 255, 255, 0.25);
+                border-radius: 3px;
+                padding: 1px 5px;
+                font-family: monospace;
+            }
+
+            .decoded-status.ok {
+                background: rgba(80, 200, 120, 0.35);
+            }
+
+            .decoded-status.bad {
+                background: rgba(220, 80, 80, 0.45);
             }
 
             .reduced_margins .input-field {
@@ -102,12 +138,21 @@
             .monitor-controls .switch label .lever {
                 margin: 0;
             }
+
+            @media (max-width: 480px) {
+                .flex_x {
+                    flex-direction: column;
+                    align-items: stretch;
+                }
+            }
         </style>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
         />
+        <link rel="stylesheet" href="style.css" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     </head>
 
@@ -115,7 +160,7 @@
         <nav class="light-blue lighten-1" role="navigation">
             <div class="nav-wrapper container">
                 <a id="logo-container" href="/" class="brand-logo">
-                    <span class="material-icons">psychology_alt</span>
+                    <span class="material-icons" aria-hidden="true">psychology_alt</span>
                     Rethink <span class="hide-on-med-and-down">management panel</span>
                 </a>
             </div>
@@ -146,14 +191,14 @@
                 &nbsp;
                 <div class="input-field">
                     <button disabled class="btn waves-effect waves-light" id="btn_send1">
-                        Send <i class="material-icons right">send</i>
+                        Send <i class="material-icons right" aria-hidden="true">send</i>
                     </button>
                 </div>
             </div>
             <div class="flex_x">
                 <div class="input-field">
                     <button disabled class="btn waves-effect waves-light" id="btn_send2">
-                        Send <i class="material-icons left">send</i>
+                        Send <i class="material-icons left" aria-hidden="true">send</i>
                     </button>
                 </div>
                 &nbsp;
