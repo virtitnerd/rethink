@@ -30,18 +30,44 @@
                 height: 24px;
             }
 
-            .dev-bridge {
-                width: 10em;
+            /* table-layout:auto (the default) sizes columns from content width, computed before
+               overflow/max-width reliably apply - text-overflow:ellipsis on individual cells
+               doesn't translate into a stable column width under it, so the header row and the
+               data row can each get sized differently and drift out of alignment as the
+               viewport changes. Confirmed live at some (not all) widths between 720px and
+               roughly 1000px. table-layout:fixed makes column widths depend only on these
+               percentages, not content, which is what makes truncation actually reliable. */
+            #devices_table {
+                table-layout: fixed;
+                width: 100%;
             }
 
-            /* Cut off rather than wrapped, at every width - not just below the card breakpoint
-               below. A 36-character UUID with no width constraint just wraps across several
-               lines in the plain table too, dragging every row's height with it and making the
-               table look inconsistent device to device. Both cells carry the full text as a
-               title, and the monitor page shows the id in full anyway. */
-            .dev-name,
+            .dev-name {
+                width: 17%;
+            }
             .dev-id {
-                max-width: 14em;
+                width: 21%;
+            }
+            .dev-model {
+                width: 20%;
+            }
+            .dev-platform {
+                width: 10%;
+            }
+            .dev-bridge {
+                width: 12%;
+            }
+            .dev-actions {
+                width: 20%;
+            }
+
+            /* Cut off rather than wrapped: a UUID or a long name/model id has nowhere to wrap to
+               once the column has a fixed width, so it would otherwise just overflow the row.
+               Both cells carry the full text as a title, and the monitor page shows the id in
+               full anyway. */
+            .dev-name,
+            .dev-id,
+            .dev-model {
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -90,6 +116,20 @@
                     min-width: 0;
                 }
 
+                /* The percentage widths above are for table-layout:fixed's column-width pass;
+                   they're meaningless once display:grid takes over below, but an explicit width
+                   on a grid item still constrains its own box independent of its grid area, so
+                   without resetting it every cell here would render far narrower than the area
+                   it's placed in instead of filling it. */
+                #devices_table .dev-name,
+                #devices_table .dev-id,
+                #devices_table .dev-model,
+                #devices_table .dev-platform,
+                #devices_table .dev-bridge,
+                #devices_table .dev-actions {
+                    width: auto;
+                }
+
                 #devices_table .dev-name {
                     grid-area: name;
                     font-weight: 500;
@@ -105,7 +145,6 @@
                 }
                 #devices_table .dev-bridge {
                     grid-area: bridge;
-                    width: auto;
                 }
                 #devices_table .dev-actions {
                     grid-area: actions;
@@ -119,14 +158,6 @@
                        style preference. --rethink-text-muted is already contrast-verified
                        against every surface it's used on. */
                     color: var(--rethink-text-muted);
-                }
-
-                /* max-width above is a fixed em value tuned for the wide table; inside the grid
-                   here the column is already width-constrained by minmax(0, 1fr), so let it use
-                   the space the grid actually gives it instead of a second, unrelated cap. */
-                #devices_table .dev-name,
-                #devices_table .dev-id {
-                    max-width: none;
                 }
 
                 /* The default button padding is wider than the icons need, and here two of them are
@@ -170,11 +201,11 @@
                 <thead>
                     <tr>
                         <th class="dev-name">Name</th>
-                        <th>ID</th>
-                        <th>Model</th>
-                        <th>Platform</th>
-                        <th>Bridge</th>
-                        <th>Actions</th>
+                        <th class="dev-id">ID</th>
+                        <th class="dev-model">Model</th>
+                        <th class="dev-platform">Platform</th>
+                        <th class="dev-bridge">Bridge</th>
+                        <th class="dev-actions">Actions</th>
                     </tr>
                 </thead>
 
