@@ -1,0 +1,126 @@
+/* Shared visual theme for the rethink management panel and device monitor.
+   Layered on top of Materialize (index.html/monitor.html still load its CSS/JS - this file
+   only restyles it, it never changes markup structure or class names Materialize/panel.js
+   rely on). */
+
+:root {
+    --rethink-bg: #f4f6f8;
+    --rethink-surface: #ffffff;
+    --rethink-nav: #1b2a4a;
+    --rethink-accent: #ff9f43;
+    --rethink-accent-dark: #e07b1f;
+    --rethink-text: #1f2933;
+    --rethink-text-muted: #6b7787;
+    --rethink-border: #e2e6ea;
+}
+
+body {
+    background: var(--rethink-bg);
+    color: var(--rethink-text);
+    font-family:
+        'Inter',
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        Roboto,
+        sans-serif;
+}
+
+nav {
+    background: var(--rethink-nav) !important;
+    box-shadow: 0 2px 8px rgba(27, 42, 74, 0.25);
+}
+
+nav .brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+nav .brand-logo .material-icons {
+    color: var(--rethink-accent);
+}
+
+.header.orange-text {
+    color: var(--rethink-accent-dark) !important;
+    font-weight: 600;
+    font-size: 1.3rem;
+    letter-spacing: 0.01em;
+}
+
+/* Turns the bare .container sections into distinct cards instead of text just sitting on the
+   page background - same content, clearer visual grouping. */
+.container {
+    background: var(--rethink-surface);
+    border: 1px solid var(--rethink-border);
+    border-radius: 10px;
+    padding: 1.25em 1.5em;
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+    box-shadow: 0 1px 3px rgba(31, 41, 51, 0.06);
+}
+
+table.highlight {
+    border-collapse: collapse;
+}
+
+table.highlight thead th {
+    color: var(--rethink-text-muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid var(--rethink-border);
+}
+
+table.highlight tbody tr {
+    border-bottom: 1px solid var(--rethink-border);
+}
+
+table.highlight tbody tr:hover {
+    background: rgba(255, 159, 67, 0.06);
+}
+
+.btn,
+.btn-large,
+.btn-small {
+    background-color: var(--rethink-accent-dark);
+    border-radius: 6px;
+    box-shadow: none;
+    text-transform: none;
+    font-weight: 500;
+}
+
+.btn:hover,
+.btn-large:hover,
+.btn-small:hover {
+    background-color: var(--rethink-accent);
+    box-shadow: 0 2px 6px rgba(224, 123, 31, 0.35);
+}
+
+.switch label input[type='checkbox']:checked + .lever {
+    background-color: rgba(255, 159, 67, 0.5);
+}
+
+.switch label input[type='checkbox']:checked + .lever:after {
+    background-color: var(--rethink-accent-dark);
+}
+
+.input-field input:focus + label,
+.input-field input.valid:focus {
+    color: var(--rethink-accent-dark) !important;
+}
+
+.input-field input:focus {
+    border-bottom: 1px solid var(--rethink-accent-dark) !important;
+    box-shadow: 0 1px 0 0 var(--rethink-accent-dark) !important;
+}
+
+.modal-footer .btn-flat {
+    color: var(--rethink-accent-dark);
+}
+
+.status_field .material-icons {
+    vertical-align: middle;
+}
