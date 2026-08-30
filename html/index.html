@@ -2,6 +2,8 @@
 <html>
     <head>
         <meta charset="utf-8" />
+        <title>Rethink management panel</title>
+        <link rel="icon" href="favicon.svg" type="image/svg+xml" />
         <style>
             .offline .hide-when-offline {
                 display: none;
@@ -88,7 +90,11 @@
                 #devices_table .dev-platform,
                 #devices_table .dev-id {
                     font-size: 0.75rem;
-                    color: rgba(0, 0, 0, 0.54);
+                    /* rgba(0,0,0,0.54) composited onto --rethink-surface renders as
+                       near-black-on-near-black in dark mode - a real WCAG failure, not just a
+                       style preference. --rethink-text-muted is already contrast-verified
+                       against every surface it's used on. */
+                    color: var(--rethink-text-muted);
                 }
 
                 /* Cut off rather than wrapped: a UUID broken across three lines is no more readable
@@ -108,11 +114,13 @@
                 }
             }
         </style>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
         />
+        <link rel="stylesheet" href="style.css" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     </head>
 
@@ -135,7 +143,7 @@
         </div>
 
         <div class="container hide-when-offline">
-            <h4 class="header orange-text">Connected devices</h4>
+            <h4 class="header orange-text">Connected devices<span id="devices_count" class="device-count"></span></h4>
             <table id="devices_table" class="highlight">
                 <thead>
                     <tr>
@@ -150,6 +158,14 @@
 
                 <tbody id="devices_body"></tbody>
             </table>
+            <p id="devices_empty" class="devices-empty hide">
+                No devices connected yet - follow the
+                <a
+                    href="https://github.com/anszom/rethink/wiki/Installing-rethink%E2%80%90cloud#step-5-configure-your-device"
+                    >wiki instructions</a
+                >
+                to connect one.
+            </p>
 
             <br />
             Follow the
@@ -221,8 +237,10 @@
                                     maxlength="2"
                                     pattern="[A-Za-z]{2}"
                                     required
+                                    aria-describedby="country_code_hint"
                                 />
                                 <label for="country_code">Country code</label>
+                                <span id="country_code_hint" class="helper-text">e.g. US, GB, DE</span>
                             </div>
                             <div class="input-field col s3">
                                 <button

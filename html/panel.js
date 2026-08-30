@@ -76,16 +76,30 @@ class DeviceEntry {
 
         td = document.createElement('td')
         td.className = 'dev-model'
-        let model = this.remoteState.model
+        // Built with DOM APIs rather than string concatenation/innerHTML on purpose:
+        // this.remoteState.model is a modelId reported by the device itself, not something to
+        // trust as HTML.
+        td.appendChild(document.createTextNode(this.remoteState.model))
         if (!this.remoteState.mapped) {
-            model += ` <i class="material-icons tooltipped tiny" data-position="bottom" data-tooltip="This device is not supported by rethink. It will not be mapped to HomeAssistant">warning</i>`
+            const badge = document.createElement('a')
+            badge.className = 'chip unsupported-badge tooltipped'
+            badge.href = 'https://github.com/anszom/rethink/wiki/Adding-support-for-a-new-device'
+            badge.target = '_blank'
+            badge.rel = 'noopener'
+            badge.setAttribute('data-position', 'bottom')
+            badge.setAttribute('data-tooltip', 'Not mapped to Home Assistant yet - click to see how to add support')
+            badge.textContent = 'unsupported'
+            td.appendChild(document.createTextNode(' '))
+            td.appendChild(badge)
         }
-        td.innerHTML = model
         children.push(td)
 
         td = document.createElement('td')
         td.className = 'dev-platform'
-        td.innerText = this.remoteState.platform
+        const platformBadge = document.createElement('span')
+        platformBadge.className = `chip platform-badge platform-${this.remoteState.platform}`
+        platformBadge.textContent = this.remoteState.platform === 'thinq1' ? 'ThinQ1' : 'ThinQ2'
+        td.appendChild(platformBadge)
         children.push(td)
 
         // The width lives in the stylesheet now: on a narrow screen this cell moves out of the
@@ -158,20 +172,48 @@ class DeviceEntry {
         }
 
         td = document.createElement('td')
+        td.className = 'dev-actions'
+
         // Materialize disables a button with pointer-events: none, which would swallow the hover
         // that opens its tooltip - so the tooltip lives on a wrapper instead of on the button.
-        td.className = 'dev-actions'
-        td.innerHTML = `
-            <span class="tooltipped" style="display: inline-block" data-position="bottom" data-tooltip="Monitor">
-                <a class="btn waves-effect waves-light" href="monitor?id=${this.id}"><i class="material-icons">troubleshoot</i></a>
-            </span>
-            <span class="tooltipped" style="display: inline-block" data-position="bottom"
-                data-tooltip="Download the modelJSON file. Requires bridge mode.">
-                <a class="btn waves-effect waves-light"><i class="material-icons">description</i></a>
-            </span>`
+        // Built with DOM APIs (and encodeURIComponent for the id in the href) rather than a
+        // template string on purpose: this.id ultimately comes from device/cloud-reported data,
+        // not something to trust unescaped in HTML or a URL.
+        const monitorWrap = document.createElement('span')
+        monitorWrap.className = 'tooltipped'
+        monitorWrap.style.display = 'inline-block'
+        monitorWrap.setAttribute('data-position', 'bottom')
+        monitorWrap.setAttribute('data-tooltip', 'Monitor')
+        const monitorLink = document.createElement('a')
+        monitorLink.className = 'btn waves-effect waves-light'
+        monitorLink.href = `monitor?id=${encodeURIComponent(this.id)}`
+        monitorLink.setAttribute('aria-label', `Open packet monitor for ${this.remoteState.model}`)
+        const monitorIcon = document.createElement('i')
+        monitorIcon.className = 'material-icons'
+        monitorIcon.setAttribute('aria-hidden', 'true')
+        monitorIcon.textContent = 'troubleshoot'
+        monitorLink.appendChild(monitorIcon)
+        monitorWrap.appendChild(monitorLink)
+        td.appendChild(monitorWrap)
+
+        const modelJsonWrap = document.createElement('span')
+        modelJsonWrap.className = 'tooltipped'
+        modelJsonWrap.style.display = 'inline-block'
+        modelJsonWrap.setAttribute('data-position', 'bottom')
+        modelJsonWrap.setAttribute('data-tooltip', 'Download the modelJSON file. Requires bridge mode.')
+        this.modelJsonButton = document.createElement('a')
+        this.modelJsonButton.className = 'btn waves-effect waves-light'
+        this.modelJsonButton.setAttribute('aria-label', `Download modelJSON for ${this.remoteState.model}`)
+        const modelJsonIcon = document.createElement('i')
+        modelJsonIcon.className = 'material-icons'
+        modelJsonIcon.setAttribute('aria-hidden', 'true')
+        modelJsonIcon.textContent = 'description'
+        this.modelJsonButton.appendChild(modelJsonIcon)
+        modelJsonWrap.appendChild(this.modelJsonButton)
+        td.appendChild(modelJsonWrap)
+
         children.push(td)
 
-        this.modelJsonButton = td.getElementsByTagName('a')[1]
         this.modelJsonButton.onclick = () => this.downloadModelJson()
 
         this.row.replaceChildren(...children)
@@ -231,6 +273,12 @@ class DeviceEntry {
     }
 }
 
+function refreshDevicesHeader() {
+    const count = Object.keys(devices).length
+    get('devices_count').textContent = count > 0 ? ` (${count})` : ''
+    get('devices_empty').classList.toggle('hide', count > 0)
+}
+
 // The first reconnect is near-immediate and only then does it back off. A socket that closes because
 // the page went into the back/forward cache, or because rethink restarted under it, otherwise leaves
 // the panel blank - everything is behind .hide-when-offline - for the whole retry interval.
@@ -288,6 +336,8 @@ function connect() {
                 // these appliances or it says nothing about any of them.
                 const named = Object.values(devices).some((dev) => dev.remoteState.name)
                 get('devices_table').classList.toggle('no-names', !named)
+
+                refreshDevicesHeader()
             }
 
             if (typeof json.bridge === 'object') {
