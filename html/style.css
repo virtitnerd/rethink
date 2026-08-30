@@ -217,3 +217,46 @@ a.unsupported-badge {
 a.unsupported-badge:hover {
     background-color: var(--rethink-unsupported-bg-hover);
 }
+
+/* Activity log panel (see panel.js's activityConnect/appendActivityEntry, management/index.ts's
+   /logs route) - a capped, scrollable feed rather than an unbounded log dump. */
+.activity-topics {
+    max-width: 22em;
+}
+
+.activity-log {
+    height: 16em;
+    overflow-y: auto;
+    border: 1px solid var(--rethink-border);
+    border-radius: 8px;
+    padding: 0.4em 0.75em;
+    font-family: monospace;
+    font-size: 0.82em;
+    background: var(--rethink-bg);
+}
+
+.activity-entry {
+    display: flex;
+    gap: 0.6em;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--rethink-border);
+}
+
+.activity-entry:last-child {
+    border-bottom: none;
+}
+
+.activity-time {
+    color: var(--rethink-text-muted);
+    flex-shrink: 0;
+}
+
+.activity-topic {
+    color: var(--rethink-accent-dark);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.activity-text {
+    word-break: break-word;
+}
