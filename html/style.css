@@ -127,3 +127,43 @@ table.highlight tbody tr:hover {
 .status_field .material-icons {
     vertical-align: middle;
 }
+
+.device-count {
+    color: var(--rethink-text-muted);
+    font-weight: 400;
+    font-size: 0.85em;
+}
+
+.devices-empty {
+    color: var(--rethink-text-muted);
+}
+
+/* Platform/unsupported-model badges on the device table - built on Materialize's own .chip
+   component rather than a bespoke one. */
+.platform-badge {
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.platform-badge.platform-thinq1 {
+    background-color: #e4ecff;
+    color: #2a4d8f;
+}
+
+.platform-badge.platform-thinq2 {
+    background-color: #e6f4ea;
+    color: #1e6b3a;
+}
+
+a.unsupported-badge {
+    background-color: #fdece0;
+    color: var(--rethink-accent-dark);
+    cursor: pointer;
+    text-decoration: none;
+}
+
+a.unsupported-badge:hover {
+    background-color: #fbdcc2;
+}
