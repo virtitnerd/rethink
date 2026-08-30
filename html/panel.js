@@ -76,6 +76,7 @@ class DeviceEntry {
 
         td = document.createElement('td')
         td.className = 'dev-model'
+        td.title = this.remoteState.model // the cell is cut off at a fixed column width
         // Built with DOM APIs rather than string concatenation/innerHTML on purpose:
         // this.remoteState.model is a modelId reported by the device itself, not something to
         // trust as HTML.
