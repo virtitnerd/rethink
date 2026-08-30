@@ -182,6 +182,22 @@
             </button>
         </div>
 
+        <div class="container hide-when-offline">
+            <h4 class="header orange-text">
+                Activity log
+                <div style="float: right">
+                    <button id="btn_toggle_activity" class="btn-flat waves-effect" type="button"></button>
+                </div>
+            </h4>
+            <div id="activity_panel" class="hide">
+                <div class="input-field activity-topics">
+                    <input id="activity_topics" type="text" />
+                    <label for="activity_topics">Filter topics (comma-separated, blank = all)</label>
+                </div>
+                <div id="activity_log" class="activity-log"></div>
+            </div>
+        </div>
+
         <div id="thinq_login" class="modal">
             <div class="modal-content">
                 <h4>Log into your LG ThinQ account</h4>

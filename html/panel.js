@@ -347,6 +347,110 @@ window.addEventListener('pageshow', (ev) => {
     if (ev.persisted) connect() // a full load runs connect() on its own
 })
 
+// Activity log: opt-in - the /logs WS (see management/index.ts) only connects while this panel
+// is expanded, and disconnects the moment it's collapsed, since an actively-bridged device can
+// log several lines a second and most sessions aren't watching for it.
+const ACTIVITY_MAX_ENTRIES = 300
+let activityWs
+let activityOpen = false
+let activityReconnectTimer
+let activityRetryDelay = 250
+
+function activityConnect() {
+    clearTimeout(activityReconnectTimer)
+    if (activityWs) {
+        activityWs.onclose = activityWs.onopen = activityWs.onmessage = null
+        try {
+            activityWs.close()
+        } catch {}
+    }
+
+    const topics = get('activity_topics').value.trim()
+    const url = baseUrl + 'logs' + (topics ? '?topics=' + encodeURIComponent(topics) : '')
+    activityWs = new WebSocket(url)
+
+    activityWs.onopen = () => {
+        activityRetryDelay = 250
+    }
+
+    activityWs.onmessage = (ev) => {
+        if (typeof ev.data !== 'string') return
+        const json = JSON.parse(ev.data)
+        appendActivityEntry(json.ts, json.topic, json.text)
+    }
+
+    activityWs.onclose = () => {
+        if (!activityOpen) return
+        activityReconnectTimer = setTimeout(activityConnect, activityRetryDelay)
+        activityRetryDelay = Math.min(activityRetryDelay * 2, 5000)
+    }
+}
+
+function activityDisconnect() {
+    clearTimeout(activityReconnectTimer)
+    if (activityWs) {
+        activityWs.onclose = activityWs.onopen = activityWs.onmessage = null
+        try {
+            activityWs.close()
+        } catch {}
+        activityWs = undefined
+    }
+}
+
+function appendActivityEntry(ts, topic, text) {
+    const log = get('activity_log')
+    const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4
+
+    const entry = document.createElement('div')
+    entry.className = 'activity-entry'
+
+    const time = document.createElement('span')
+    time.className = 'activity-time'
+    time.textContent = new Date(ts).toLocaleTimeString()
+    entry.appendChild(time)
+
+    const topicChip = document.createElement('span')
+    topicChip.className = 'activity-topic'
+    topicChip.textContent = topic
+    entry.appendChild(topicChip)
+
+    const textSpan = document.createElement('span')
+    textSpan.className = 'activity-text'
+    textSpan.textContent = text
+    entry.appendChild(textSpan)
+
+    log.appendChild(entry)
+    while (log.children.length > ACTIVITY_MAX_ENTRIES) log.removeChild(log.firstChild)
+    if (atBottom) log.scrollTop = log.scrollHeight
+}
+
+function setActivityToggleLabel() {
+    const btn = get('btn_toggle_activity')
+    btn.replaceChildren()
+    const icon = document.createElement('i')
+    icon.className = 'material-icons left'
+    icon.textContent = activityOpen ? 'expand_less' : 'expand_more'
+    btn.appendChild(icon)
+    btn.appendChild(document.createTextNode(activityOpen ? 'Hide' : 'Show'))
+}
+
+get('btn_toggle_activity').onclick = () => {
+    activityOpen = !activityOpen
+    get('activity_panel').classList.toggle('hide', !activityOpen)
+    setActivityToggleLabel()
+    if (activityOpen) activityConnect()
+    else activityDisconnect()
+}
+
+get('activity_topics').addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' || !activityOpen) return
+    ev.preventDefault()
+    get('activity_log').replaceChildren()
+    activityConnect()
+})
+
+setActivityToggleLabel()
+
 function get(id) {
     return document.getElementById(id)
 }
