@@ -141,6 +141,17 @@ describe(MODEL_ID, () => {
         assert.deepEqual(components.remote_start_button.availability, [{ topic: '$this/remote_start_available' }])
     })
 
+    test('last_cycle_energy uses a state_class HA actually allows for device_class energy', () => {
+        // Regression test: HA rejects state_class "measurement" paired with device_class
+        // "energy" outright. "total_increasing" is both the only valid choice and the correct
+        // one here - HA treats a drop in a total_increasing value as a meter reset, which is
+        // exactly what a new cycle's total is relative to the last one.
+        const { ha } = makeDevice()
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.last_cycle_energy.device_class, 'energy')
+        assert.equal(components.last_cycle_energy.state_class, 'total_increasing')
+    })
+
     test('course_selection defaults to Normal on construction, before any data arrives', () => {
         const { ha } = makeDevice()
         assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal')
