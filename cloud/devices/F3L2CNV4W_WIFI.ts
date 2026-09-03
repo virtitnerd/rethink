@@ -700,10 +700,16 @@ export default class Device extends HADevice {
             this.publishProperty('controls_available', state === 0 || state === 5 ? 'online' : 'offline')
             // Remote Start also needs to stay available while Paused: modelJson has no distinct
             // Resume action, OperationStart is how you resume a paused cycle too (same as
-            // pressing Start on the physical panel while paused).
+            // pressing Start on the physical panel while paused). Also requires remote_start
+            // (option2 bit 7, published below) actually armed on the washer itself - confirmed
+            // against the real LG app, which won't start a cycle remotely unless this is
+            // engaged on the machine, the same physical-presence safety step as pressing the
+            // panel's own Remote Start button first. course_selection isn't gated on this: it
+            // only sets which course a later Remote Start press would use, it never sends
+            // anything to the device itself.
             this.publishProperty(
                 'remote_start_available',
-                state === 0 || state === 5 || state === 6 ? 'online' : 'offline',
+                (state === 0 || state === 5 || state === 6) && option2 & 0x80 ? 'online' : 'offline',
             )
             this.publishProperty('pre_state', STATES[preState] ?? String(preState))
             this.publishProperty('course', AP_COURSE[apCourse] ?? String(apCourse))
