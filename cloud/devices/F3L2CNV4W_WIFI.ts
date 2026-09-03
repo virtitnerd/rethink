@@ -597,11 +597,13 @@ export default class Device extends HADevice {
                         // 1000 for kWh" comment - a different endpoint than our ThinQ1 diagmon
                         // energyMonInfo, but the same LG-ecosystem naming convention, and 154 Wh
                         // is a physically plausible total for a ~77 min Normal cycle. state_class
-                        // is deliberately "measurement", not "total_increasing": this is a
-                        // per-cycle snapshot that resets/changes each time, not a running counter,
-                        // so it won't be offered as an Energy Dashboard source by mistake.
+                        // has to be "total_increasing", not "measurement": HA rejects that pairing
+                        // for device_class "energy" outright. It also happens to be the correct
+                        // semantics here - HA already treats a drop in a total_increasing value as
+                        // a meter reset and starts counting again from there, which is exactly what
+                        // a new cycle's total does relative to the last one.
                         device_class: 'energy',
-                        state_class: 'measurement',
+                        state_class: 'total_increasing',
                         unit_of_measurement: 'Wh',
                         name: 'Last cycle energy usage',
                         icon: 'mdi:lightning-bolt-outline',
