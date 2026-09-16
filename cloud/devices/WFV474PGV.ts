@@ -6,6 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import log from '@/util/logging'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG oven reporting modelName "WFV474PGV" (deviceType 301, QCOM_QCA4010).
 //

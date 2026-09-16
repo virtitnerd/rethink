@@ -6,6 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
 import HADevice from './base'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 const FAN_MODES = Enum.of({
     low: 2,
