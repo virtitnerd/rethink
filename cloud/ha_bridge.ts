@@ -1,50 +1,4 @@
-import POT_056905_WW from './devices/POT_056905_WW'
-import WTDN3 from './devices/WTDN3'
-import H11 from './devices/H11'
-import N17 from './devices/N17'
-import D30 from './devices/D30'
-import WTWN3 from './devices/WTWN3'
-import RAC_056905_WW from './devices/RAC_056905_WW'
-import RAC_056905_WW_T1 from './devices/RAC_056905_WW_T1'
-import WIN_056905_WW from './devices/WIN_056905_WW'
-import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
-import Dev_2REF11EIDG__4 from './devices/2REF11EIDG__4'
-import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
-import Dev_2REFTBDII4P_U from './devices/2REFTBDII4P_U'
-import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
-import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
-import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
-import STUDIO_HOOD from './devices/STUDIO_HOOD'
-import WMVEM1825 from './devices/WMVEM1825'
-import WMVEL2137 from './devices/WMVEL2137'
-import WLSI_633_ from './devices/WLSI_633_'
-import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
-import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
-import Y_VB_Y___W_B32QEUK from './devices/Y_VB_Y___W.B32QEUK'
-import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
-import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
-import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
-import F_C__Y___W_A__QEUK from './devices/F_C__Y___W.A__QEUK'
-import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
-import F_VB_Y___W_B_2QEUK from './devices/F_VB_Y___W.B_2QEUK'
-import VCDWL2QEUK from './devices/VCDWL2QEUK'
-import T1789EFH_F from './devices/T1789EFH_F'
-import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
-import F3L2CYU__ from './devices/F3L2CYU__'
-import F3L7CYK5W_US_WIFI from './devices/F3L7CYK5W_US_WIFI'
-import F3P3CYK2_ from './devices/F3P3CYK2_'
-import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
-import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
-import RC90U2_WW from './devices/RC90U2_WW'
-import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
-import FAFXU25006 from './devices/FAFXU25006'
-import TLVE5BB from './devices/TLVE5BB'
-import BDH_D30007_US from './devices/BDH_D30007_US'
-import DHUM_056905_WW from './devices/DHUM_056905_WW'
-import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
-import WFV474PGV from './devices/WFV474PGV'
-import WLREL6323S from './devices/WLREL6323S'
-import D0211 from './devices/D0211'
+import { readdirSync } from 'node:fs'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -55,65 +9,28 @@ import { AnyDevice } from './devmgr'
 type T1Factory = new (HA: Connection, thinq: T1Device, metadata: Metadata) => HADevice
 type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HADevice
 
-const t1deviceTypes: Record<string, T1Factory> = {
-    WTDN3,
-    RAC_056905_WW: RAC_056905_WW_T1, // QCA4002 module, 2.6.7_RTOS_3K firmware: same model id as the TLV variant, but registers over ThinQ1 (issue #70)
-    WTWN3, // LG F4J7TN1W front-load washer (ThinQ1, QCA4002 module)
-}
+const t1deviceTypes: Record<string, T1Factory> = {}
+const t2deviceTypes: Record<string, T2Factory> = {}
 
-const t2deviceTypes: Record<string, T2Factory> = {
-    POT_056905_WW,
-    RAC_056905_WW,
-    WIN_056905_WW,
-    H11,
-    D30,
-    '2REF11EIDA__4': Dev_2REF11EIDA__4,
-    '2REF11EIDG__4': Dev_2REF11EIDG__4,
-    '2REF11EBIVPC4': Dev_2REF11EBIVPC4,
-    '2REFTBDII4P_U': Dev_2REFTBDII4P_U,
-    '2RES1VE61NFA2': Dev_2RES1VE61NFA2,
-    '2REB1GLVB1__2': Dev_2REB1GLVB1__2,
-    '2RES1VE600FWC': Dev_2RES1VE600FWC,
-    '2REFT1DIC4P_U': Dev_2REFT1DIC4P_U,
-    STUDIO_HOOD,
-    WMVEM1825,
-    WMVEL2137,
-    WLSI_633_,
-    N17, // LG LDNPQ445S dishwasher (BK7234 platform, reports the board id "N17")
-    'Y_V8_Y___W.B32QEUK': Y_V8_Y___W_B32QEUK,
-    'F_V8_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK,
-    'Y_V8_F___W.B_2QEUK': Y_V8_F___W_B_2QEUK,
-    VCDWL2QEUK, // LG F4X7511TWS front-load washer (matched on modelId VCDWL2QEUK)
-    'F_V__F___W.B_1QEUK': F_V__F___W_B_1QEUK,
-    'F_C__Y___W.A__QEUK': F_C__Y___W_A__QEUK,
-    'F_VB_F___W.B_2QEUK': F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
-    'F_VB_Y___W.B_2QEUK': F_VB_Y___W_B_2QEUK, // LG F4WV710ATR front-load washer (Vivace V750 10.5kg), same layout as F_V8_Y plus detergent/softener dosing
-    'Y_VB_Y___W.B32QEUK': Y_VB_Y___W_B32QEUK, // LG F14R76BSTA front-loading washer
-    T1789EFH_F, // LG WT7300CW top-loading washer
-    RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
-    F3L2CYU__, // LG front-load washer
-    F3L7CYK5W_US_WIFI, // LG front-load washer, same record layout as F3L2CYU__ but a different course table and two extra option bits
-    F3P3CYK2_, // LG WM4200HBA front-load washer, 44-byte AABB records
-    RV13B6BSD_D_US_WIFI, // LG electric dryer
-    RV13B6ES_D_US_WIFI, // LG electric dryer, same frame layout as RV13B6BSD but Wrinkle Care sits in a different bitfield
-    WTL_FXU_BDV_NA_01, // LG WashTower
-    FAFXU25006, // LG WM5800HVA front-load washer, long 0xFF-escaped AABB framing with 72-byte records
-    TLVE5BB, // LG WT21BWV6 top-load washer, long 0xFF-escaped AABB framing with 50-byte records
-    BDH_D30007_US, // LG DLHC5502V heat-pump dryer, long 0xFF-escaped AABB framing with 42-byte records
-    DHUM_056905_WW,
-    ST_B_E4H01Y_APL,
-    WFV474PGV, // LG double oven/range
-    WLREL6323S, // LG LREL6323S single-oven electric range
-    D0211, // LG ThinQ dishwasher (deviceType 204), DB365TXS / DBC435TSL.AASQEIS
-    RC90U2_WW, // LG RC9DN9029 heat pump dryer (EU), same AABB dialect as the two dryers above but with the 25-byte EU record layout
+// Every real device handler in ./devices registers itself here just by existing, provided it
+// exports `platform` ('thinq1' or 'thinq2') alongside its default class - the modelId is its
+// filename unless it exports `modelId` (for a handler that shares a modelId with another one
+// on the other platform), and a class serving more than one modelId (a compatible variant, a
+// typo'd model string LG ships, etc.) adds the extras via an `aliases` export. A
+// file with no `platform` export is a shared base module (base.ts, tlv_device.ts,
+// washer_common.ts, ...), not a device, and is skipped - this is also why one is never
+// mistaken for the other here.
+const devicesDir = new URL('./devices', import.meta.url)
+for (const file of readdirSync(devicesDir)) {
+    if (!/\.(ts|js)$/.test(file) || file.endsWith('.d.ts')) continue
 
-    // aliases:
-    RAC_0B0001_WW: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
-    'F_V7_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
-    'F_V7_Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
-    'F_V__Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
-    'F_VA_F___W.B__QEUK': F_V__F___W_B_1QEUK, // FV1413H2BA front-load washer SoftAP model (deviceType 201)
-    RC90V9_WW: RC90U2_WW, // LG RC91V9EV2Q heat pump dryer, same records
+    const mod = await import(`./devices/${file}`)
+    if (mod.platform !== 'thinq1' && mod.platform !== 'thinq2') continue
+
+    const registry = mod.platform === 'thinq1' ? t1deviceTypes : t2deviceTypes
+    const modelId = mod.modelId ?? file.replace(/\.(ts|js)$/, '')
+    registry[modelId] = mod.default
+    for (const alias of mod.aliases ?? []) registry[alias] = mod.default
 }
 
 class Bridge {

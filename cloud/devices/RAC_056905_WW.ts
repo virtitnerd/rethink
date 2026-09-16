@@ -7,6 +7,9 @@ import * as TLV from '@/util/tlv'
 import { racAirTemp, racPipeTemp } from '@/util/ac_tables'
 import HADevice from './base'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
+// A different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler.
+export const aliases = ['RAC_0B0001_WW']
 
 // exported for the benefit of RAC_056905_WW_T1
 export const MODES = Enum.of({
