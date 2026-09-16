@@ -12,6 +12,7 @@ import {
     fridgeRange,
     type TemperatureUnit,
 } from './fridge_common'
+export const platform = 'thinq2'
 
 // 2REFTBDII4P_U - 68-byte AABB refrigerator status record.
 //

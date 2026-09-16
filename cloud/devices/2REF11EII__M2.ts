@@ -6,6 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { packStatus, type Status, type TemperatureUnit, unpackStatus } from './fridge_common'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // 2REF11EII__M2 - LG ThinQ Refrigerator
 //

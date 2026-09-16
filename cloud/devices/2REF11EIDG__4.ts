@@ -12,6 +12,7 @@ import {
     unpackStatus,
     TemperatureUnit,
 } from './fridge_common'
+export const platform = 'thinq2'
 
 // LG LRFXC2606S — 26 cu. ft. 3-door French door refrigerator with in-door ice and water.
 // ThinQ model 2REF11EIDG__4 (model JSON family VF_GOOD_G). Same 68-byte AABB status block as

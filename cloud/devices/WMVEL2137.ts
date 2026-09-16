@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG over-the-range microwave/hood, marketing model MVEL2033F, matched on modelId "WMVEL2137"
 // (thinq2 deviceType 302).
