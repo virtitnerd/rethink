@@ -6,6 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { ERRORS, COURSES, TEMPERATURES, SPINS, DRYING_MODES, DOSES } from './washer_common'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // Codes derived from modelJSON & observation of the LG app.
 const STATUS = Enum.of({

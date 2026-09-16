@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG WM4200HBA front-load washer, matched on modelId "F3P3CYK2_" (thinq2 deviceType 201).
 //

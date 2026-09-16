@@ -6,6 +6,8 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
 
+export const platform = 'thinq2'
+
 // LG front-load washer, matched on modelId "FAFXU25006" (thinq2 deviceType 201), sold as WM5800HVA.
 //
 // This model uses the long, length-escaped AABB framing (aa ff <class> <envelope> <len16> ... <inner
