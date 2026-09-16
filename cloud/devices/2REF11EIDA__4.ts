@@ -12,6 +12,7 @@ import {
     TemperatureUnit,
 } from './fridge_common'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 const FLEX_OPTIONS = Enum.of({
     'Chilled Wine': 1,
