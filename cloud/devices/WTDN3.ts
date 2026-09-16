@@ -4,6 +4,7 @@ import { type Connection } from '../homeassistant'
 import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
 import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+export const platform = 'thinq1'
 
 export default class Device extends HADevice {
     constructor(

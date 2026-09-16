@@ -1,34 +1,4 @@
-import POT_056905_WW from './devices/POT_056905_WW'
-import WTDN3 from './devices/WTDN3'
-import RAC_056905_WW from './devices/RAC_056905_WW'
-import WIN_056905_WW from './devices/WIN_056905_WW'
-import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
-import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
-import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
-import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
-import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
-import Dev_STUDIO_HOOD from './devices/STUDIO_HOOD'
-import Dev_WMVEM1825 from './devices/WMVEM1825'
-import Dev_WMVEL2137 from './devices/WMVEL2137'
-import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
-import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
-import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
-import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
-import F_C__Y___W_A__QEUK from './devices/F_C__Y___W.A__QEUK'
-import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
-import VCDWL2QEUK from './devices/VCDWL2QEUK'
-import T1789EFH_F from './devices/T1789EFH_F'
-import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
-import F3L2CYU__ from './devices/F3L2CYU__'
-import F3L7CYK5W_US_WIFI from './devices/F3L7CYK5W_US_WIFI'
-import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
-import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
-import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
-import DHUM_056905_WW from './devices/DHUM_056905_WW'
-import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
-import WFV474PGV from './devices/WFV474PGV'
-import WLREL6323S from './devices/WLREL6323S'
-import F3L2CNV4W_WIFI from './devices/F3L2CNV4W_WIFI'
+import { readdirSync } from 'node:fs'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -39,49 +9,27 @@ import { AnyDevice } from './devmgr'
 type T1Factory = new (HA: Connection, thinq: T1Device, metadata: Metadata) => HADevice
 type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HADevice
 
-const t1deviceTypes: Record<string, T1Factory> = {
-    WTDN3,
-    F3L2CNV4W_WIFI,
-}
+const t1deviceTypes: Record<string, T1Factory> = {}
+const t2deviceTypes: Record<string, T2Factory> = {}
 
-const t2deviceTypes: Record<string, T2Factory> = {
-    POT_056905_WW,
-    RAC_056905_WW,
-    ['RAC_0B0001_WW']: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
-    WIN_056905_WW,
-    ['2REF11EIDA__4']: Dev_2REF11EIDA__4,
-    ['2REF11EBIVPC4']: Dev_2REF11EBIVPC4,
-    ['2RES1VE61NFA2']: Dev_2RES1VE61NFA2,
-    ['2REB1GLVB1__2']: Dev_2REB1GLVB1__2,
-    ['2RES1VE600FWC']: Dev_2RES1VE600FWC,
-    ['STUDIO_HOOD']: Dev_STUDIO_HOOD,
-    ['WMVEM1825']: Dev_WMVEM1825,
-    ['WMVEL2137']: Dev_WMVEL2137,
-    ['Y_V8_Y___W.B32QEUK']: Y_V8_Y___W_B32QEUK,
-    ['F_V7_Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
-    ['F_V7_Y___W.B__QEUK']: F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
-    ['F_V8_Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK,
-    ['Y_V8_F___W.B_2QEUK']: Y_V8_F___W_B_2QEUK,
-    ['F_V__Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
-    ['VCDWL2QEUK']: VCDWL2QEUK, // LG F4X7511TWS front-load washer (matched on modelId VCDWL2QEUK)
-    ['F_V__F___W.B_1QEUK']: F_V__F___W_B_1QEUK,
-    ['F_C__Y___W.A__QEUK']: F_C__Y___W_A__QEUK,
-    // FV1413H2BA front-load washer SoftAP model F_VA_F___W.B__QEUK (deviceType 201)
-    ['F_VA_F___W.B__QEUK']: F_V__F___W_B_1QEUK,
-    ['F_VB_F___W.B_2QEUK']: F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
-    ['T1789EFH_F']: T1789EFH_F, // LG WT7300CW top-loading washer
-    ['RV13U6AM8W_D_US_WIFI']: RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
-    ['F3L2CYU__']: F3L2CYU__, // LG front-load washer
-    ['F3L7CYK5W_US_WIFI']: F3L7CYK5W_US_WIFI, // LG front-load washer, same record layout as F3L2CYU__ but
-    // a different course table and two extra option bits, so it needs its own handler rather than an alias
-    ['RV13B6BSD_D_US_WIFI']: RV13B6BSD_D_US_WIFI, // LG electric dryer
-    ['RV13B6ES_D_US_WIFI']: RV13B6ES_D_US_WIFI, // LG electric dryer, same frame layout as RV13B6BSD but
-    // Wrinkle Care sits in a different bitfield, so it needs its own handler rather than an alias
-    WTL_FXU_BDV_NA_01, // LG WashTower
-    DHUM_056905_WW,
-    ST_B_E4H01Y_APL,
-    WFV474PGV, // LG double oven/range
-    WLREL6323S, // LG LREL6323S single-oven electric range
+// Every real device handler in ./devices registers itself here just by existing, provided it
+// exports `platform` ('thinq1' or 'thinq2') alongside its default class - the modelId is its
+// filename, and a class serving more than one modelId (a compatible variant, a typo'd model
+// string LG ships, etc.) adds the extras via an `aliases` export instead of a second file. A
+// file with no `platform` export is a shared base module (base.ts, tlv_device.ts,
+// washer_common.ts, ...), not a device, and is skipped - this is also why one is never
+// mistaken for the other here.
+const devicesDir = new URL('./devices', import.meta.url)
+for (const file of readdirSync(devicesDir)) {
+    if (!/\.(ts|js)$/.test(file) || file.endsWith('.d.ts')) continue
+
+    const mod = await import(`./devices/${file}`)
+    if (mod.platform !== 'thinq1' && mod.platform !== 'thinq2') continue
+
+    const registry = mod.platform === 'thinq1' ? t1deviceTypes : t2deviceTypes
+    const modelId = file.replace(/\.(ts|js)$/, '')
+    registry[modelId] = mod.default
+    for (const alias of mod.aliases ?? []) registry[alias] = mod.default
 }
 
 class Bridge {

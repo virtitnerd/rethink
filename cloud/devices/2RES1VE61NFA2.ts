@@ -14,6 +14,7 @@ import {
     TemperatureUnit,
     unpackStatus,
 } from './fridge_common'
+export const platform = 'thinq2'
 
 const STATUS_LENGTH = 27
 

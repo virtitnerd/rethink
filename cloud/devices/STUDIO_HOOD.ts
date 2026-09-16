@@ -4,6 +4,7 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
+export const platform = 'thinq2'
 
 // LG STUDIO_HOOD range hood (thinq2 deviceType 304).
 //

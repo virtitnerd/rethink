@@ -4,6 +4,8 @@ import { type Connection } from '../homeassistant'
 import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
 
+export const platform = 'thinq1'
+
 // LG F3L2CNV4W_WIFI front-load washer (ThinQ1, deviceType 201).
 //
 // Field layout and enums below come from LG's own modelJson for this model - see
