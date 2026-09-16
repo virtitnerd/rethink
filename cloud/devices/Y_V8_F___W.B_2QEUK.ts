@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+export const platform = 'thinq2'
 
 // LG W4WR70E61 washer/dryer combo (article F4Y7ERP1W.ABWQPDG).
 // Control commands are identical to F_V8_Y___W.B_2QEUK / Y_V8_Y___W.B32QEUK, but the status
