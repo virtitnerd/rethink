@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG front-load washer — matched on modelId "F3L2CYU__". AABB frames (buf = the AABB body, AA+len and
 // checksum+BB already stripped, buf[0]==0x20 on every frame) are discriminated by buf[1] (NOT buf[3],

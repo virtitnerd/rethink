@@ -6,6 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
 import HADevice from './base'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 /**
  * TLV tags present in capability (0xA7/0x01) packets — store during the caps query phase
