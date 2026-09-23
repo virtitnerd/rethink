@@ -1,0 +1,342 @@
+/* Shared visual theme for the rethink management panel and device monitor.
+   Layered on top of Materialize (index.html/monitor.html still load its CSS/JS - this file
+   only restyles it, it never changes markup structure or class names Materialize/panel.js
+   rely on). */
+
+:root {
+    --rethink-bg: #f4f6f8;
+    --rethink-surface: #ffffff;
+    --rethink-nav: #1b2a4a;
+    --rethink-accent: #ff9f43;
+    /* #994c00, not the brighter --rethink-accent, because this token is also used as text
+       (headers, links, focus labels) - WCAG AA needs >=4.5:1 against a white/near-white
+       surface for normal-size text, which #e07b1f (2.99:1) and even #b35900 (4.20-4.46:1
+       against the slightly-tinted badge/activity backgrounds) both fell short of; verified
+       against every surface this token actually sits on before picking this value. */
+    --rethink-accent-dark: #994c00;
+    --rethink-text: #1f2933;
+    /* Darkened from #6b7787 (4.20:1) - failed AA against the activity log's --rethink-bg
+       backdrop, the one place this token sits on something other than --rethink-surface. */
+    --rethink-text-muted: #5a6572;
+    --rethink-border: #e2e6ea;
+    --rethink-thinq1-bg: #e4ecff;
+    --rethink-thinq1-text: #2a4d8f;
+    --rethink-thinq2-bg: #e6f4ea;
+    --rethink-thinq2-text: #1e6b3a;
+    --rethink-unsupported-bg: #fdece0;
+    --rethink-unsupported-bg-hover: #fbdcc2;
+    /* Button backgrounds host white Materialize text, which needs a background dark enough
+       for 4.5:1 regardless of theme - deliberately NOT redefined in the dark media query below,
+       unlike every other token here. Reusing --rethink-accent-dark for this (the original
+       design) put light mode at 2.99:1 and dark mode at 1.98:1 (1.80:1 on hover) since that
+       token needs to go LIGHT in dark mode to stay readable as text on a dark surface, which
+       is the opposite of what a button background hosting white text needs. */
+    --rethink-btn-bg: #b35900;
+    --rethink-btn-bg-hover: #8a3d00;
+    color-scheme: light;
+}
+
+/* Follows the OS/browser preference automatically - no manual toggle (yet). Materialize
+   itself hardcodes several component backgrounds (modal, dropdown/autocomplete) rather than
+   using CSS custom properties, so those need explicit selector overrides below rather than
+   just new token values - confirmed against Materialize 1.0.0's actual source
+   (.modal/.modal-footer #fafafa, .dropdown-content #fff, li:hover/.active #eee). */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --rethink-bg: #14181f;
+        --rethink-surface: #1c222c;
+        --rethink-nav: #10151d;
+        --rethink-accent: #ffb066;
+        --rethink-accent-dark: #ffa354;
+        --rethink-text: #e4e7ec;
+        --rethink-text-muted: #93a0b3;
+        --rethink-border: #2a3240;
+        --rethink-thinq1-bg: #1c2a4a;
+        --rethink-thinq1-text: #9db8f5;
+        --rethink-thinq2-bg: #1a3324;
+        --rethink-thinq2-text: #7fcf9a;
+        --rethink-unsupported-bg: #3a2a1a;
+        --rethink-unsupported-bg-hover: #4a3722;
+        color-scheme: dark;
+    }
+
+    .modal,
+    .modal .modal-footer {
+        background-color: var(--rethink-surface);
+    }
+
+    .dropdown-content {
+        background-color: var(--rethink-surface);
+    }
+
+    .dropdown-content li:hover,
+    .dropdown-content li.active {
+        background-color: var(--rethink-border);
+    }
+
+    .input-field input[type='text']:not(.valid) {
+        border-bottom-color: var(--rethink-border);
+    }
+}
+
+body {
+    background: var(--rethink-bg);
+    color: var(--rethink-text);
+    font-family:
+        'Inter',
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        Roboto,
+        sans-serif;
+}
+
+/* Materialize's own nav is a fixed 56px tall and never grows to fit its content - fine for its
+   own use case (a short one-word wordmark), broken for a real three-word title like ours.
+   Below 992px Materialize *also* switches .brand-logo to position:absolute + centered
+   (nav .brand-logo{left:50%;transform:translateX(-50%)}), so at almost any window narrower than
+   a desktop monitor - not just phones - the title can wrap, and since it's positioned outside
+   the document flow the wrapped line spills out past the bar's fixed height onto the page
+   background underneath, instead of the bar growing to contain it. Verified against
+   Materialize 1.0.0's actual CDN CSS, not guessed. Overriding back to a normal in-flow layout
+   fixes this at every width, not just one breakpoint. */
+nav {
+    background: var(--rethink-nav) !important;
+    box-shadow: 0 2px 8px rgba(27, 42, 74, 0.25);
+    height: auto;
+    min-height: 56px;
+}
+
+.nav-wrapper {
+    height: auto;
+    min-height: 56px;
+}
+
+nav .brand-logo {
+    position: static;
+    left: auto;
+    transform: none;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4em;
+    font-weight: 600;
+    font-size: 1.3rem;
+    letter-spacing: 0.01em;
+    padding: 0.6em 0;
+}
+
+nav .brand-logo .material-icons {
+    color: var(--rethink-accent);
+}
+
+.header.orange-text {
+    color: var(--rethink-accent-dark) !important;
+    font-weight: 600;
+    font-size: 1.3rem;
+    letter-spacing: 0.01em;
+}
+
+/* Turns the bare .container sections into distinct cards instead of text just sitting on the
+   page background - same content, clearer visual grouping. Materialize's own nav markup reuses
+   this same generic .container class internally (<div class="nav-wrapper container">) for
+   unrelated layout purposes - excluding .nav-wrapper is required, not optional, or this card
+   styling (padding/margin/background/shadow) gets jammed inside the nav bar too. */
+.container:not(.nav-wrapper) {
+    background: var(--rethink-surface);
+    border: 1px solid var(--rethink-border);
+    border-radius: 10px;
+    padding: 1.25em 1.5em;
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+    box-shadow: 0 1px 3px rgba(31, 41, 51, 0.06);
+}
+
+table.highlight {
+    border-collapse: collapse;
+}
+
+table.highlight thead th {
+    color: var(--rethink-text-muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid var(--rethink-border);
+}
+
+table.highlight tbody tr {
+    border-bottom: 1px solid var(--rethink-border);
+}
+
+table.highlight tbody tr:hover {
+    background: rgba(255, 159, 67, 0.06);
+}
+
+.btn,
+.btn-large,
+.btn-small {
+    background-color: var(--rethink-btn-bg);
+    border-radius: 6px;
+    box-shadow: none;
+    text-transform: none;
+    font-weight: 500;
+}
+
+.btn:hover,
+.btn-large:hover,
+.btn-small:hover {
+    background-color: var(--rethink-btn-bg-hover);
+    box-shadow: 0 2px 6px rgba(138, 61, 0, 0.35);
+}
+
+/* Materialize suppresses its own focus ring via box-shadow:none above; restore a visible one
+   for keyboard navigation (WCAG 2.4.7) without showing it on mouse/touch clicks. */
+.btn:focus-visible,
+.btn-large:focus-visible,
+.btn-small:focus-visible,
+.btn-flat:focus-visible {
+    outline: 2px solid var(--rethink-accent);
+    outline-offset: 2px;
+}
+
+.switch label input[type='checkbox']:checked + .lever {
+    background-color: rgba(255, 159, 67, 0.5);
+}
+
+.switch label input[type='checkbox']:checked + .lever:after {
+    background-color: var(--rethink-accent-dark);
+}
+
+.input-field input:focus + label,
+.input-field input.valid:focus {
+    color: var(--rethink-accent-dark) !important;
+}
+
+.input-field input:focus {
+    border-bottom: 1px solid var(--rethink-accent-dark) !important;
+    box-shadow: 0 1px 0 0 var(--rethink-accent-dark) !important;
+}
+
+/* Materialize's own .btn-flat default (color:#343434, transparent background) assumes a light
+   page - 1.28:1 against our dark-mode card background, confirmed by computing the actual ratio
+   (need 4.5:1), which is as good as invisible. Was only overridden inside .modal-footer before;
+   the activity-log toggle button sits on a plain card, not a modal, so it fell through to the
+   unreadable Materialize default in dark mode - reported live by a real screen, not something
+   jsdom (no layout/paint) could have caught. */
+.btn-flat {
+    color: var(--rethink-accent-dark);
+}
+
+.status_field .material-icons {
+    vertical-align: middle;
+}
+
+.device-count {
+    color: var(--rethink-text-muted);
+    font-weight: 400;
+    font-size: 0.85em;
+}
+
+.devices-empty {
+    color: var(--rethink-text-muted);
+}
+
+.bridge-mode-intro {
+    color: var(--rethink-text-muted);
+    margin-top: 0;
+}
+
+/* Platform/unsupported-model badges on the device list - built on Materialize's own .chip
+   component rather than a bespoke one. Layout (table vs. card, breakpoint grid) lives in
+   index.html's own inline stylesheet alongside the #devices_table rules it styles. */
+.platform-badge {
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.platform-badge.platform-thinq1 {
+    background-color: var(--rethink-thinq1-bg);
+    color: var(--rethink-thinq1-text);
+}
+
+.platform-badge.platform-thinq2 {
+    background-color: var(--rethink-thinq2-bg);
+    color: var(--rethink-thinq2-text);
+}
+
+a.unsupported-badge {
+    background-color: var(--rethink-unsupported-bg);
+    color: var(--rethink-accent-dark);
+    cursor: pointer;
+    text-decoration: none;
+}
+
+a.unsupported-badge:hover {
+    background-color: var(--rethink-unsupported-bg-hover);
+}
+
+a.unsupported-badge:focus-visible {
+    outline: 2px solid var(--rethink-accent);
+    outline-offset: 2px;
+}
+
+/* Activity log panel (see panel.js's activityConnect/appendActivityEntry, management/index.ts's
+   /logs route) - a capped, scrollable feed rather than an unbounded log dump. */
+.activity-topics {
+    max-width: 22em;
+}
+
+.activity-log {
+    height: 16em;
+    overflow-y: auto;
+    border: 1px solid var(--rethink-border);
+    border-radius: 8px;
+    padding: 0.4em 0.75em;
+    font-family: monospace;
+    font-size: 0.82em;
+    background: var(--rethink-bg);
+}
+
+.activity-entry {
+    display: flex;
+    gap: 0.6em;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--rethink-border);
+}
+
+.activity-entry:last-child {
+    border-bottom: none;
+}
+
+.activity-time {
+    color: var(--rethink-text-muted);
+    flex-shrink: 0;
+}
+
+.activity-topic {
+    color: var(--rethink-accent-dark);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.activity-text {
+    word-break: break-word;
+}
+
+/* Narrow viewports: the fixed-width time/topic columns leave too little room for the message
+   text once the flex row can't wrap gracefully, and card padding/margins compound quickly on a
+   phone-width screen where every section is stacked. */
+@media (max-width: 480px) {
+    .activity-entry {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .container:not(.nav-wrapper) {
+        padding: 1em;
+        margin-top: 0.75em;
+        margin-bottom: 0.75em;
+    }
+}
