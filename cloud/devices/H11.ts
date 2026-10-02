@@ -7,6 +7,8 @@ import AABBDevice from './aabb_device'
 import log from '@/util/logging'
 import { Enum } from '@/util/enum'
 
+export const platform = 'thinq2'
+
 // LG H11 dishwasher (modelId "H11"). AABBDevice removes AA/length and checksum/BB
 // before passing the inner body to processAABB. Incoming bodies begin with 0x32:
 //   0xEC  status change (94 bytes): previous and current 46-byte records; read the second.

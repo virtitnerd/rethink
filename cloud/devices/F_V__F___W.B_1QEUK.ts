@@ -5,6 +5,9 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+export const platform = 'thinq2'
+// FV1413H2BA front-load washer SoftAP model F_VA_F___W.B__QEUK (deviceType 201).
+export const aliases = ['F_VA_F___W.B__QEUK']
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {

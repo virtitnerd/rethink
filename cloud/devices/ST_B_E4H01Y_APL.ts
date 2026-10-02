@@ -6,6 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 /*
  * LG Styler (S5BBP), ThinQ model ST_B_E4H01Y_APL, deviceType 203.

@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS } from './washer_common'
+export const platform = 'thinq2'
 
 // F_C__Y___W.A__QEUK — LG F4WV709P1, front-loading washer, A-generation UK
 // 62-byte AABB status packet (0x20 0xEC subtype).
