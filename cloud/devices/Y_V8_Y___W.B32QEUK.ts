@@ -6,6 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { ERRORS, STATES, TEMPERATURES, SPINS, SOIL_LEVELS, RINSES, SMART_COURSES } from './washer_common'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 const STATUS_LENGTH = 39
 

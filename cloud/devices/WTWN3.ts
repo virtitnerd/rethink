@@ -5,6 +5,7 @@ import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
 import { Enum } from '@/util/enum'
 import { ERRORS, RINSES, SPINS, STATES, TEMPERATURES } from './washer_common'
+export const platform = 'thinq1'
 
 // LG F4J7TN1W (ThinQ Model ID WTWN3, deviceType 201): 8 kg front-load washer, TITAN2 platform,
 // ThinQ1 with the QCA4002 module (FwVer QC_Modem_1.2.80). Same 28-byte status layout as WTDN3
