@@ -2,6 +2,8 @@
 <html>
     <head>
         <meta charset="utf-8" />
+        <title>Rethink management panel</title>
+        <link rel="icon" href="favicon.svg" type="image/svg+xml" />
         <style>
             /* Materialize sets dark text but no background, which leaves the canvas transparent.
                Standalone the browser paints it white, but embedded - in a Home Assistant ingress
@@ -90,6 +92,49 @@
                 line-height: 1;
             }
 
+            /* table-layout:auto (the default) sizes columns from content width, computed before
+               overflow/max-width reliably apply - text-overflow:ellipsis on individual cells
+               doesn't translate into a stable column width under it, so the header row and the
+               data row can each get sized differently and drift out of alignment as the
+               viewport changes. Confirmed live at some (not all) widths between 720px and
+               roughly 1000px. table-layout:fixed makes column widths depend only on these
+               percentages, not content, which is what makes truncation actually reliable. */
+            #devices_table {
+                table-layout: fixed;
+                width: 100%;
+            }
+
+            .dev-name {
+                width: 17%;
+            }
+            .dev-id {
+                width: 21%;
+            }
+            .dev-model {
+                width: 20%;
+            }
+            .dev-platform {
+                width: 10%;
+            }
+            .dev-bridge {
+                width: 12%;
+            }
+            .dev-actions {
+                width: 20%;
+            }
+
+            /* Cut off rather than wrapped: a UUID or a long name/model id has nowhere to wrap to
+               once the column has a fixed width, so it would otherwise just overflow the row.
+               Both cells carry the full text as a title, and the monitor page shows the id in
+               full anyway. */
+            .dev-name,
+            .dev-id,
+            .dev-model {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
             /*
              * The device list is the widest thing on this page, and the widest thing in it is a
              * 36-character UUID, so on a phone the whole page ends up scrolling sideways. Below the
@@ -101,6 +146,17 @@
             @media (max-width: 720px) {
                 #devices_table thead {
                     display: none;
+                }
+
+                /* display:grid on the <tr> alone leaves <table>/<tbody> as display:table/
+                   table-row-group, still running their own internal table layout algorithm
+                   around a row it no longer controls - a real, reported WebKit/Safari
+                   inconsistency, not just a Chrome-vs-Safari style difference. Freeing the
+                   ancestors too is the standard fix for "table becomes a grid of cards on
+                   narrow screens". */
+                #devices_table,
+                #devices_table tbody {
+                    display: block;
                 }
 
                 #devices_table tbody tr {
@@ -122,6 +178,20 @@
                     min-width: 0;
                 }
 
+                /* The percentage widths above are for table-layout:fixed's column-width pass;
+                   they're meaningless once display:grid takes over below, but an explicit width
+                   on a grid item still constrains its own box independent of its grid area, so
+                   without resetting it every cell here would render far narrower than the area
+                   it's placed in instead of filling it. */
+                #devices_table .dev-name,
+                #devices_table .dev-id,
+                #devices_table .dev-model,
+                #devices_table .dev-platform,
+                #devices_table .dev-bridge,
+                #devices_table .dev-actions {
+                    width: auto;
+                }
+
                 #devices_table .dev-name {
                     grid-area: name;
                     font-weight: 500;
@@ -137,7 +207,6 @@
                 }
                 #devices_table .dev-bridge {
                     grid-area: bridge;
-                    width: auto;
                 }
                 #devices_table .dev-actions {
                     grid-area: actions;
@@ -146,17 +215,11 @@
                 #devices_table .dev-platform,
                 #devices_table .dev-id {
                     font-size: 0.75rem;
-                    color: rgba(0, 0, 0, 0.54);
-                }
-
-                /* Cut off rather than wrapped: a UUID broken across three lines is no more readable
-                   than a truncated one, and it drags the row's height with it. Both cells carry the
-                   full text as a title, and the monitor page shows the id in full anyway. */
-                #devices_table .dev-name,
-                #devices_table .dev-id {
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
+                    /* rgba(0,0,0,0.54) composited onto --rethink-surface renders as
+                       near-black-on-near-black in dark mode - a real WCAG failure, not just a
+                       style preference. --rethink-text-muted is already contrast-verified
+                       against every surface it's used on. */
+                    color: var(--rethink-text-muted);
                 }
 
                 /* The default button padding is wider than the icons need, and here two of them are
@@ -166,11 +229,13 @@
                 }
             }
         </style>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
         />
+        <link rel="stylesheet" href="style.css" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="icon" type="image/png" href="favicon.png" />
     </head>
@@ -195,26 +260,34 @@
         </nav>
         <div class="container">
             <h4 class="header orange-text">Connectivity</h4>
-            <span id="status_rethink" class="status_field"></span>Browser 🡘 Rethink<br />
-            <span id="status_mqtt" class="status_field"></span>Rethink 🡘 MQTT<br />
+            <span id="status_rethink" class="status_field" role="status"></span>Browser 🡘 Rethink<br />
+            <span id="status_mqtt" class="status_field" role="status"></span>Rethink 🡘 MQTT<br />
         </div>
 
         <div class="container hide-when-offline">
-            <h4 class="header orange-text">Connected devices</h4>
+            <h4 class="header orange-text">Connected devices<span id="devices_count" class="device-count"></span></h4>
             <table id="devices_table" class="highlight">
                 <thead>
                     <tr>
                         <th class="dev-name">Name</th>
-                        <th>ID</th>
-                        <th>Model</th>
-                        <th>Platform</th>
-                        <th>Bridge</th>
-                        <th>Actions</th>
+                        <th class="dev-id">ID</th>
+                        <th class="dev-model">Model</th>
+                        <th class="dev-platform">Platform</th>
+                        <th class="dev-bridge">Bridge</th>
+                        <th class="dev-actions">Actions</th>
                     </tr>
                 </thead>
 
                 <tbody id="devices_body"></tbody>
             </table>
+            <p id="devices_empty" class="devices-empty hide">
+                No devices connected yet - follow the
+                <a
+                    href="https://github.com/anszom/rethink/wiki/Installing-rethink%E2%80%90cloud#step-5-configure-your-device"
+                    >wiki instructions</a
+                >
+                to connect one.
+            </p>
 
             <br />
             Follow the
@@ -227,8 +300,12 @@
 
         <div class="container hide-when-offline">
             <h4 class="header orange-text">Bridge mode</h4>
-            <span id="status_bridge" class="status_field"></span>Status: <span id="status_bridge_text"></span
-            ><br /><br />
+            <p class="bridge-mode-intro">
+                Bridge mode registers your devices with LG's own cloud too, so the official LG app keeps working side by
+                side with Home Assistant. It's optional - skip this if you only need local control.
+            </p>
+            <span id="status_bridge" class="status_field" role="status"></span>Status:
+            <span id="status_bridge_text" role="status"></span><br /><br />
             <button
                 id="btn_thinq_login"
                 class="hide btn waves-effect waves-light modal-trigger"
@@ -245,6 +322,22 @@
             >
                 logout<i class="material-icons right">logout</i>
             </button>
+        </div>
+
+        <div class="container hide-when-offline">
+            <h4 class="header orange-text">
+                Activity log
+                <div style="float: right">
+                    <button id="btn_toggle_activity" class="btn-flat waves-effect" type="button"></button>
+                </div>
+            </h4>
+            <div id="activity_panel" class="hide">
+                <div class="input-field activity-topics">
+                    <input id="activity_topics" type="text" />
+                    <label for="activity_topics">Filter topics (comma-separated, blank = all)</label>
+                </div>
+                <div id="activity_log" class="activity-log"></div>
+            </div>
         </div>
 
         <div id="thinq_login" class="modal">
@@ -266,8 +359,10 @@
                                     maxlength="2"
                                     pattern="[A-Za-z]{2}"
                                     required
+                                    aria-describedby="country_code_hint"
                                 />
                                 <label for="country_code">Country code</label>
+                                <span id="country_code_hint" class="helper-text">e.g. US, GB, DE</span>
                             </div>
                             <div class="input-field col s3">
                                 <button
