@@ -6,6 +6,8 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
 
+export const platform = 'thinq2'
+
 // LG heat-pump dryer, matched on modelId "BDH_D30007_US" (thinq2 deviceType 202), sold as DLHC5502V.
 //
 // Like its matching washer (see FAFXU25006.ts) this model uses the long, length-escaped AABB framing

@@ -3,6 +3,7 @@ import { allowExtendedType } from '@/util/casting'
 import { Enum } from '@/util/enum'
 import { DOSES, SMART_COURSES } from './washer_common'
 import Y_V8_Y___W_B32QEUK, { COURSES as V8_COURSES } from './Y_V8_Y___W.B32QEUK'
+export const platform = 'thinq2'
 
 // The ezDispense ("auto dosing") variant of Y_V8_Y___W.B32QEUK. The LG cloud decodes the two models'
 // status records with one parser - frames sent to both as simulated appliances came back identical,

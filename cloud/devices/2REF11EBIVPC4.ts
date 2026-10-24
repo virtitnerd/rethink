@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { convertFreezerTemperature, convertFridgeTemperature, freezerRange, fridgeRange } from './fridge_common'
+export const platform = 'thinq2'
 
 // 2REF11EBIVPC4 - LG ThinQ Refrigerator (Israeli market)
 // Always Celsius, 43-byte status block, Shabbat mode supported.

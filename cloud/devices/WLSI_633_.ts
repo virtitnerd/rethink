@@ -6,6 +6,8 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
 
+export const platform = 'thinq2'
+
 // LG slide-in induction range, marketing model LSIS6338FE, matched on modelId "WLSI_633_"
 // (thinq2 deviceType 301). LG's own modelJSON calls it "Studio IH". Read-only.
 //

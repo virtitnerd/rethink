@@ -13,6 +13,8 @@ import {
     APPLIANCE_STATES,
     unpackStatus,
 } from './dishwasher_common'
+export const platform = 'thinq2'
+export const aliases = ['D2211']
 
 // LG D0211 ThinQ dishwasher (deviceType 204) — DB365TXS / DBC435TSL.AASQEIS.
 //

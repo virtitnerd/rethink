@@ -13,6 +13,7 @@ import {
     APPLIANCE_STATES,
     unpackStatus,
 } from './dishwasher_common'
+export const platform = 'thinq2'
 
 // LG D30 ThinQ dishwasher (deviceType 204), sold as the LDT54788D (US).
 //
