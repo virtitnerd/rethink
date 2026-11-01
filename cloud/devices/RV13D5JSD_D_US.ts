@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG DLEX4200B electric dryer, matched on modelId "RV13D5JSD_D_US" (ThinQ2 deviceType 202).
 // The wire format is the same 29-byte AABB record family used by the RV13B6 dryers:

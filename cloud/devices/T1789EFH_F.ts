@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG WT7300CW top-load washer — matched on modelId "T1789EFH_F". AABB frames (buf = the AABB body,
 // AA+len and checksum+BB already stripped) start with 0x20 and are discriminated by buf[1]:

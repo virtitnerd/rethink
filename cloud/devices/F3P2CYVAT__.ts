@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG front-load washer — matched on modelId "F3P2CYVAT__" ("US_Victor2_Refresh_Pro_Steam(VH)", marketing
 // name references "Titan27", sold as WM3600HWA). AABB frames (buf = the AABB body, AA+len and

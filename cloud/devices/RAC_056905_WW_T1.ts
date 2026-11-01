@@ -5,6 +5,9 @@ import { allowExtendedType } from '@/util/casting'
 import { type Metadata } from '../thinq'
 import { Enum } from '@/util/enum'
 import { FAN_MODES, MODES, SWING_H_MODES, SWING_MODES } from './RAC_056905_WW'
+export const platform = 'thinq1'
+// Same modelId as the TLV handler (RAC_056905_WW.ts), registered over ThinQ1.
+export const modelId = 'RAC_056905_WW'
 
 type Status = Record<string, string>
 

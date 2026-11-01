@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG F2NX50S9TKC (2025 slim front-loader, EU). The F2X50S9THB of #85 reports the same model id. Wi-Fi
 // module RTK_RTL8720cm, appInfo protocolVer 7.

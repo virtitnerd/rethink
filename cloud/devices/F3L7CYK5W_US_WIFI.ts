@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG front-load washer — matched on modelId "F3L7CYK5W_US_WIFI". Shares the AABB record layout of the
 // F3L2CYU__ sibling (25-byte record led by a 0x18 marker) but is NOT an alias of it:

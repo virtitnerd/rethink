@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+export const platform = 'thinq2'
 
 // LG electric dryer — matched on modelId "RV13B6ES_D_US_WIFI". Frame layout is identical to its close
 // relative RV13B6BSD_D_US_WIFI (see that file): AABB frames (buf = the AABB body, AA+len and
