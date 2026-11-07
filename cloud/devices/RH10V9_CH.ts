@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import log from '@/util/logging'
+export const platform = 'thinq2'
 
 /**
  * LG heat-pump dryer — SoftAP model RH10V9_CH (deviceType 202, e.g. RH10V9 family).

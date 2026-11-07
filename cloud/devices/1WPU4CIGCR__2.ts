@@ -4,6 +4,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
+export const platform = 'thinq2'
 
 /*
  * LG PuriCare Water Purifier (ATOM-U, ThinQ model 1WPU4CIGCR__2, deviceType 103).

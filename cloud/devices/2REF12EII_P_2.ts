@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { freezerRange, fridgeRange, unpackStatus } from './fridge_common'
+export const platform = 'thinq2'
 
 // 2REF12EII_P_2 - LG ThinQ Refrigerator
 // Protocol derived from live capture
