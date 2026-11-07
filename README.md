@@ -216,6 +216,12 @@ The following appliances are currently supported in rethink:
 | ----------- | --------------------------------- | ------------------------------------------------------------- |
 | HWWA9S_F2U  | A9K-CORE3S, CordZero stick vacuum | 👍 read-only status, power mode, battery, filter and air path |
 
+### Water heaters
+
+| ThinQ model   | Appliance        | Support    |
+| ------------- | ---------------- | ---------- |
+| WHT_056905_WW | WH27S, APHWC801M | 👍 working |
+
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
 

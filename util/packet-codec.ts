@@ -185,8 +185,9 @@ export function decodePacket(hex: string): Decoded {
     }
 
     // TLV: identify by the uart "kind" byte at index 6
-    if (buf.length >= 13 && buf[2] === 0x04 && (buf[6] === 0x87 || buf[6] === 0x65)) {
-        const fromDevice = buf[6] === 0x87
+    // 0x87 = fromDevice (RAC/WIN/POT); 0xa7 = fromDevice (DHUM/WHT); 0x65 = toDevice
+    if (buf.length >= 13 && buf[2] === 0x04 && (buf[6] === 0x87 || buf[6] === 0xa7 || buf[6] === 0x65)) {
+        const fromDevice = buf[6] === 0x87 || buf[6] === 0xa7
         const len = buf[10]
         check('tlv.length', len, buf.length - 13)
         check('tlv.crc16', crc16(buf.subarray(2, buf.length - 2)), buf.readUInt16BE(buf.length - 2))
