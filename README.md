@@ -229,6 +229,10 @@ The following appliances are currently supported in rethink:
 | ThinQ model   | Appliance        | Support    |
 | ------------- | ---------------- | ---------- |
 | WHT_056905_WW | WH27S, APHWC801M | 👍 working |
+- Water Purifiers:
+    - 🫤 WD722RH (1WPD6CMIDR\_\_3), LG PuriCare IX 2nd Water Purifier - preliminary support; ice lock, ice-only lever, ice-first mode, hot water lock, cold water enable, default hot water temperature, display and sound settings, default dispense presets and lever type are controllable
+- Ovens and Ranges:
+    - 🫤 WFV474PGV, Double oven/range - preliminary status, timer, cancel, and constrained remote-start support
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
