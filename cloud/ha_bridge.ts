@@ -28,6 +28,11 @@ for (const file of readdirSync(devicesDir)) {
     if (mod.platform !== 'thinq1' && mod.platform !== 'thinq2') continue
 
     const registry = mod.platform === 'thinq1' ? t1deviceTypes : t2deviceTypes
+    if (mod.models) {
+        // A file serving several model ids with different classes lists them as `models`.
+        Object.assign(registry, mod.models)
+        continue
+    }
     const modelId = mod.modelId ?? file.replace(/\.(ts|js)$/, '')
     registry[modelId] = mod.default
     for (const alias of mod.aliases ?? []) registry[alias] = mod.default

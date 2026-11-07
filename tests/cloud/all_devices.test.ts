@@ -13,7 +13,7 @@ for (const file of readdirSync(devicesDir).filter((f) => f.endsWith('.ts') && !f
     const mod = await import(`@/cloud/devices/${file}`)
     if (mod.platform !== 'thinq1' && mod.platform !== 'thinq2') continue
     const base = file.replace(/\.ts$/, '')
-    for (const modelId of [mod.modelId ?? base, ...(mod.aliases ?? [])]) {
+    for (const modelId of mod.models ? Object.keys(mod.models) : [mod.modelId ?? base, ...(mod.aliases ?? [])]) {
         const key = `${mod.platform}:${modelId}`
         if (owners.has(key)) collisions.push(`${key} (${owners.get(key)} and ${file})`)
         owners.set(key, file)
