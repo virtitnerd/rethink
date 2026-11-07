@@ -192,6 +192,8 @@ The following appliances are currently supported in rethink:
     - 👍 MD19GQGE0, Smart Dehumidifier - mostly working
 - Air Purifiers:
     - 🫤 AS309DWA (AIR_910604_WW), LG PuriCare Air Purifier - power, operating mode, fan speeds, circulation rotation, indicator light, air sanitization and sleep timer are controllable; air-quality sensors and filter life are reported
+- Humidifiers:
+    - 👍 HUM_056905_WW, PuriCare humidifying air purifier - mostly working
 - Range Hoods:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
 - Stylers:
