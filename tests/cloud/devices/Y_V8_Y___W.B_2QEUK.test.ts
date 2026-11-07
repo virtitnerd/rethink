@@ -91,7 +91,7 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
 
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Not selected')
         assert.equal(props.temp, 'Not selected')
         assert.equal(props.spin, 'Not selected')
@@ -105,13 +105,13 @@ describe(MODEL_ID, () => {
         assert.equal(props.remote_start, 'OFF')
     })
 
-    test('real empty-cycle frames decode Measuring then Washing with the selected programme', () => {
+    test('real empty-cycle frames decode Detecting then Washing with the selected programme', () => {
         const { ha, thinq } = makeDevice()
 
         thinq.emit('data', SAMPLE_MEASURING)
         let props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Measuring')
+        assert.equal(props.status, 'Detecting')
         assert.equal(props.course, 'Cotton')
         assert.equal(props.temp, 'Cold')
         assert.equal(props.spin, 'No spin')

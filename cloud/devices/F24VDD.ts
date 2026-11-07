@@ -861,7 +861,7 @@ export default class Device extends AABBDevice {
     // Scoped to this device only: the base class is shared with every other
     // handler in the repo and some of those never captured a checksummed
     // fixture, so changing it there would break unrelated devices.
-    processData(buf: Buffer) {
+    onData(buf: Buffer) {
         if (buf.length < 4 || buf[0] !== 0xaa || buf[buf.length - 1] !== 0xbb) return
         const sum = buf.subarray(0, buf.length - 2).reduce((pv, cv) => pv + cv, 0)
         if (buf[buf.length - 2] !== ((sum & 0xff) ^ 0x55)) return
