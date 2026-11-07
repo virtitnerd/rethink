@@ -210,6 +210,12 @@ The following appliances are currently supported in rethink:
 - Stick Vacuums:
     - 👍 HWWA9K_F2, LG CordZero A9 Stick Vacuum - mostly working
 
+#### Vacuum cleaners
+
+| ThinQ model | Appliance                         | Support                                                       |
+| ----------- | --------------------------------- | ------------------------------------------------------------- |
+| HWWA9S_F2U  | A9K-CORE3S, CordZero stick vacuum | 👍 read-only status, power mode, battery, filter and air path |
+
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
 
