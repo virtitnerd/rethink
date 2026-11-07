@@ -52,15 +52,6 @@ describe(MODEL_ID, () => {
         assert.equal(ha.getProperty(DEVICE_ID, 'status', 'state'), 'Initial')
         assert.equal(ha.getProperty(DEVICE_ID, 'remaining_time', 'state'), 25)
         assert.equal(ha.getProperty(DEVICE_ID, 'power', 'state'), 'ON')
-        assert.equal(ha.getProperty(DEVICE_ID, 'flags', 'state'), 0)
-        dev.drop()
-    })
-
-    test('0xEB publishes flags byte when set', () => {
-        const { ha, thinq, dev } = makeDevice()
-        thinq.emit('data', SAMPLE_EB_FLAGS)
-        assert.equal(ha.getProperty(DEVICE_ID, 'flags', 'state'), 8)
-        assert.equal(ha.getProperty(DEVICE_ID, 'remaining_time', 'state'), 25)
         dev.drop()
     })
 
@@ -69,7 +60,6 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EC)
         assert.equal(ha.getProperty(DEVICE_ID, 'status', 'state'), 'Initial')
         assert.equal(ha.getProperty(DEVICE_ID, 'remaining_time', 'state'), 25)
-        assert.equal(ha.getProperty(DEVICE_ID, 'flags', 'state'), 8)
         dev.drop()
     })
 

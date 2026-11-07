@@ -76,23 +76,6 @@ export default class Device extends AABBDevice {
                         device_class: 'duration',
                         unit_of_measurement: 'min',
                     },
-                    // Diagnostic raw fields until course/temp/dry-level are mapped
-                    flags: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-flags',
-                        state_topic: '$this/flags',
-                        name: 'Flags (raw)',
-                        icon: 'mdi:flag',
-                        entity_category: 'diagnostic',
-                    },
-                    raw_b21: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-raw_b21',
-                        state_topic: '$this/raw_b21',
-                        name: 'Raw byte 21',
-                        icon: 'mdi:numeric',
-                        entity_category: 'diagnostic',
-                    },
                 },
             }),
         )
@@ -130,14 +113,10 @@ export default class Device extends AABBDevice {
 
         const phase = rec[2]
         const remaining = rec[0] * 60 + rec[1]
-        const flags = rec[17]
-        const b21 = rec[21]
 
         this.publishProperty('status', STATUS[phase] ?? `0x${phase.toString(16)}`)
         this.publishProperty('remaining_time', remaining)
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('flags', flags)
-        this.publishProperty('raw_b21', b21)
     }
 
     processAABB(buf: Buffer) {
