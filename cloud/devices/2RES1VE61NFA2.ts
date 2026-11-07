@@ -16,9 +16,9 @@ import {
 } from './fridge_common'
 export const platform = 'thinq2'
 
-const STATUS_LENGTH = 27
-
 export default class Device extends AABBDevice {
+    // Length of the status record; a model with a shorter one overrides it.
+    protected readonly statusLength: number = 27
     readonly deviceConfig: DeviceDiscovery
     temperatureUnit: TemperatureUnit | undefined
 
@@ -34,54 +34,53 @@ export default class Device extends AABBDevice {
 
         this.temperatureUnit = unit
         // set or re-set the temperature unit
-        this.setConfig(
-            allowExtendedType({
-                ...this.deviceConfig,
-                components: {
-                    fridge_setpoint: {
-                        platform: 'number',
-                        device_class: 'temperature',
-                        unique_id: '$deviceid-fridge_setpoint',
-                        state_topic: '$this/fridge_setpoint',
-                        command_topic: '$this/fridge_setpoint/set',
-                        name: 'Fridge temperature',
-                        ...fridgeRange(unit),
-                    },
-                    express_cool: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-express_cool',
-                        state_topic: '$this/express_cool',
-                        command_topic: '$this/express_cool/set',
-                        icon: 'mdi:snowflake-variant',
-                        name: 'Express Cool',
-                    },
-                    freezer_setpoint: {
-                        platform: 'number',
-                        device_class: 'temperature',
-                        unique_id: '$deviceid-freezer_setpoint',
-                        state_topic: '$this/freezer_setpoint',
-                        command_topic: '$this/freezer_setpoint/set',
-                        name: 'Freezer temperature',
-                        ...freezerRange(unit),
-                    },
-                    express_freeze: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-express_freeze',
-                        state_topic: '$this/express_freeze',
-                        command_topic: '$this/express_freeze/set',
-                        icon: 'mdi:snowflake',
-                        name: 'Express Freeze',
-                    },
-                    door: {
-                        platform: 'binary_sensor',
-                        device_class: 'door',
-                        unique_id: '$deviceid-door',
-                        state_topic: '$this/door',
-                        name: 'Door',
-                    },
-                },
-            }),
-        )
+        this.setConfig(allowExtendedType({ ...this.deviceConfig, components: this.components(unit) }))
+    }
+
+    protected components(unit: TemperatureUnit) {
+        return {
+            fridge_setpoint: {
+                platform: 'number',
+                device_class: 'temperature',
+                unique_id: '$deviceid-fridge_setpoint',
+                state_topic: '$this/fridge_setpoint',
+                command_topic: '$this/fridge_setpoint/set',
+                name: 'Fridge temperature',
+                ...fridgeRange(unit),
+            },
+            express_cool: {
+                platform: 'switch',
+                unique_id: '$deviceid-express_cool',
+                state_topic: '$this/express_cool',
+                command_topic: '$this/express_cool/set',
+                icon: 'mdi:snowflake-variant',
+                name: 'Express Cool',
+            },
+            freezer_setpoint: {
+                platform: 'number',
+                device_class: 'temperature',
+                unique_id: '$deviceid-freezer_setpoint',
+                state_topic: '$this/freezer_setpoint',
+                command_topic: '$this/freezer_setpoint/set',
+                name: 'Freezer temperature',
+                ...freezerRange(unit),
+            },
+            express_freeze: {
+                platform: 'switch',
+                unique_id: '$deviceid-express_freeze',
+                state_topic: '$this/express_freeze',
+                command_topic: '$this/express_freeze/set',
+                icon: 'mdi:snowflake',
+                name: 'Express Freeze',
+            },
+            door: {
+                platform: 'binary_sensor',
+                device_class: 'door',
+                unique_id: '$deviceid-door',
+                state_topic: '$this/door',
+                name: 'Door',
+            },
+        }
     }
 
     start() {
@@ -89,7 +88,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        this.processCommonStatus(buf, 0x10, STATUS_LENGTH, this.processStatus)
+        this.processCommonStatus(buf, 0x10, this.statusLength, this.processStatus)
     }
 
     processStatus(curStatus: Buffer) {
@@ -103,7 +102,7 @@ export default class Device extends AABBDevice {
     }
 
     sendSetting(setting: Partial<Status>) {
-        this.send(Buffer.concat([Buffer.from('F017', 'hex'), packStatus(setting, STATUS_LENGTH)]))
+        this.send(Buffer.concat([Buffer.from('F017', 'hex'), packStatus(setting, this.statusLength)]))
     }
 
     setProperty(prop: string, mqttValue: string) {
