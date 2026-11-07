@@ -4,11 +4,12 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
+import { Enum } from '@/util/enum'
 export const platform = 'thinq2'
 
 // LG WM4000HWA front-load washer — matched on modelId "F3P2CYUBE__" (ThinQ2, deviceType 201, "TITAN27_BIG"
-// panel per its modelJson; consumer model confirmed from the appliance plaque, serial 312TNZN1G525).
-// Panel photo confirms: 12 dial courses (see COURSE) + a Downloaded slot, and 5 levels each on Temp/Spin/Soil. Same AABB frame family as the F3L2CYU__ sibling, but a LONGER record: 44 bytes led by a 0x2B
+// panel per its modelJson). The panel has 12 dial courses (see COURSE) + a Downloaded slot, and 5 levels each on
+// Temp/Spin/Soil. Same AABB frame family as the F3L2CYU__ sibling, but a longer record: 44 bytes led by a 0x2B
 // marker (the sibling's is 25 bytes led by 0x18), so every offset below is this model's own.
 //
 // Frames are discriminated by buf[1] (buf[0] == 0x20 on every frame):
@@ -32,11 +33,11 @@ export const platform = 'thinq2'
 //   rec[14:16] remainTime    remaining minutes, 16-bit big-endian (NOT hour:minute — a 140-min Sanitary run is 00 8c,
 //                            and the cloud's 286 is 01 1e; same encoding as reserve two bytes earlier)
 //   rec[16:18] initialTime   total cycle minutes, same 16-bit encoding
-//   rec[19]  courseSpendPower LG's field name; tracks a cloud value but its unit/meaning is undocumented — published raw
+//   rec[19]  courseSpendPower energy used by the cycle, in Wh as on FAFXU25006
 //   rec[22]  state           enum (STATE); rec[23] holds the previous state
 //   rec[28]  rinse count     TOTAL rinses incl. a course's built-ins; NOT published (extra_rinse_count is the added count)
-//   rec[29]  cycles          count since the last Tub Clean
-//   rec[30]  bit 0x04        Signal (end-of-cycle chime / button beeps)
+//   rec[29]  TCLCount        washes since the last Tub Clean
+//   rec[30]  signal          end-of-cycle chime / button beeps; non-zero = on
 //   rec[35]  bit 0x04 cold wash, 0x20 turbo wash (course-locked on some courses), 0x40 pre-wash
 //   rec[36]  bit 0x10 steam, 0x20 Rinse+Spin subcycle (temp & soil report null while it is active)
 //   rec[37]  bit 0x40 FreshCare
@@ -48,7 +49,7 @@ export const platform = 'thinq2'
 // sub-byte, redundant with state. rec[38] 0x40 (LG's doorClose) is NOT the door: against a contact sensor on an HBA
 // it set on door-open but cleared ~95 s after the LAST panel interaction of any kind (power, dial, button, door) — a
 // panel activity/wake timer. Not published. The physical door LOCK is NOT in-frame and not in LG's MonitoringValue
-// (its app shows no lock tile either). Error codes not yet observed.
+// (its app shows no lock tile either).
 
 // One status block is a leading byte + the 44B record; 0xEB carries one block, 0xEC two (old, current).
 const STATUS_LENGTH = 45
@@ -65,16 +66,19 @@ const INITIAL_OFFSET = 16 // total cycle minutes, 16-bit big-endian at rec[16:18
 const RESERVE_HI_OFFSET = 12 // reserve (delay-wash) minutes, 16-bit big-endian at rec[12:14]; 0 unless armed
 const RESERVE_LO_OFFSET = 13
 const ENERGY_OFFSET = 19
+// rec[20]: cloud `error`. Injecting 0x01 here made the LG cloud report an error enum; the F3P2CYVAT__ sibling,
+// which shares this record, confirmed 0 (no error) and 20 (door open) directly.
+const ERROR_OFFSET = 20
 const STATE_OFFSET = 22
 const PRESTATE_OFFSET = 23
 // SmartCourse code currently sitting in the 0xFF "Downloaded" slot — the specialty cycle the app shows as loaded,
-// echoed back in every status frame. Same code the WMDownload command carries (the byte after `10 0b`). Long
-// mislabeled a constant 0x69 because the slot rests on Small Load; it is NOT constant — it tracks each SmartCourse
-// as it is downloaded (verified across the 2026-09-05 capture). Mapped to a name via SMARTCOURSE.
+// echoed back in every status frame. Same code the WMDownload command carries (the byte after `10 0b`). It rests
+// on Small Load (0x69) and tracks each SmartCourse as it is downloaded. Mapped to a name via SMARTCOURSE.
 const DOWNLOAD_COURSE_OFFSET = 24
-const CYCLES_OFFSET = 29
-const SIGNAL_OFFSET = 30 // panel "Signal" (end-of-cycle chime / button beeps). CONFIRMED via an off/on capture:
-const SIGNAL_BIT = 0x04 // rec[30] 0x00 -> 0x04 as Signal was toggled on; symmetric in the previous-state record.
+const TUB_CLEAN_COUNT_OFFSET = 29
+// Panel "Signal" (end-of-cycle chime / button beeps): 0x00 -> 0x04 as Signal was toggled on. The cloud decodes
+// this byte as a buzzer level (0x02 gave BUZZER_2), so anything non-zero counts as on.
+const SIGNAL_OFFSET = 30
 // rec[35] options byte (base 0x20). Cold Wash pinned live: 0x20->0x24 with cloud coldWash ON, and it forces
 // temp to Cold + lengthens the estimate, matching the sibling. Other bits of this byte not yet isolated.
 const OPTS35_OFFSET = 35
@@ -111,93 +115,118 @@ const AIDDLED_BIT = 0x01 // AI DD fabric-sensing badge (LG's AIDDLed). Purely a 
 
 const STATE_OFF = 0x00
 
-// modelJson MonitoringValue.state — indices verbatim, labels de-shouted.
-const STATE: Record<number, string> = {
-    0x00: 'Off',
-    0x01: 'Initial',
-    0x02: 'Paused',
-    0x03: 'Detecting',
-    0x05: 'Add Drain',
-    0x06: 'Detergent Amount',
-    0x07: 'Reserved',
-    0x09: 'Pre-wash',
-    0x0b: 'Running',
-    0x0c: 'Rinsing',
-    0x0d: 'Rinse Hold',
-    0x0e: 'Spinning',
-    0x0f: 'Drying',
-    0x10: 'End',
-    0x15: 'Refreshing',
-    0x17: 'Error Auto Off',
-    0x1b: 'Frozen Prevent Initial',
-    0x1c: 'Frozen Prevent Pause',
-    0x1d: 'Frozen Prevent Running',
-    0x22: 'Audible Diagnosis',
-    0x23: 'Auto DT Open Pause',
-    0x24: 'Confirm Start For Control',
-}
+// modelJson MonitoringValue.state; labels as in the F3P2CYVAT__ sibling, which shares this record.
+const STATE = Enum.of({
+    Off: 0x00,
+    Standby: [0x01, 0x1b], // the second code is FROZEN_PREVENT_INITIAL
+    Paused: [0x02, 0x1c], // the second code is FROZEN_PREVENT_PAUSE
+    Detecting: 0x03,
+    Filling: 0x05,
+    'Detergent amount': 0x06,
+    Delayed: 0x07,
+    'Pre-wash': 0x09,
+    Washing: [0x0b, 0x1d], // the second code is FROZEN_PREVENT_RUNNING
+    Rinsing: 0x0c,
+    'Rinse hold': 0x0d,
+    Spinning: 0x0e,
+    Drying: 0x0f,
+    End: 0x10,
+    Refreshing: 0x15,
+    Error: 0x17, // ERROR_AUTO_OFF
+    'Audible diagnosis': 0x22,
+    'Auto DT open pause': 0x23,
+    'Confirm Start': 0x24, // CONFIRM_START_FOR_CONTROL
+})
 
-const SOIL: Record<number, string> = {
-    0: 'None',
-    1: 'Light',
-    2: 'Light-Normal',
-    3: 'Normal',
-    4: 'Normal-Heavy',
-    5: 'Heavy',
-}
+// 'None' must not be used as a label: it has a special meaning in HA's MQTT integration.
+const SOIL = Enum.of({
+    'Not selected': 0,
+    Light: 1,
+    'Light-Normal': 2,
+    Normal: 3,
+    'Normal-Heavy': 4,
+    Heavy: 5,
+})
 
-const TEMP: Record<number, string> = {
-    0: 'None',
-    13: 'Tap Cold',
-    14: 'Cold',
-    15: 'Eco Warm',
-    16: 'Warm',
-    17: 'Warm Rinse',
-    18: 'Hot',
-    19: 'Extra Hot',
-}
+const TEMP = Enum.of({
+    'Not selected': 0,
+    'Tap Cold': 13,
+    Cold: 14,
+    'Eco Warm': 15,
+    Warm: 16,
+    'Warm Rinse': 17,
+    Hot: 18,
+    'Extra Hot': 19,
+})
 
-const SPIN: Record<number, string> = {
-    0: 'None',
-    12: 'No Spin', // panel label on both an HWA and an HBA
-    13: 'Low',
-    14: 'Medium',
-    15: 'High',
-    16: 'Extra High',
-}
+const SPIN = Enum.of({
+    'Not selected': 0,
+    'No Spin': 12, // panel label on both an HWA and an HBA
+    Low: 13,
+    Medium: 14,
+    High: 15,
+    'Extra High': 16,
+})
+
+// modelJson MonitoringValue.error, labels copied from the F3P2CYVAT__ sibling. This model's modelJson adds
+// ERROR_PFE (12), which it documents as the same power failure as ERROR_PF (35).
+const ERRORS = Enum.of({
+    OK: 0,
+    'Water supply error (IE)': 2,
+    'Water drain error (OE)': 3,
+    'Out of balance error (UE)': 4,
+    'Overfill error (FE)': 5,
+    'Unknown error (AE)': 6,
+    'Water pressure error (PE)': 7,
+    'Thermistor error (tE)': 8,
+    'BLDC error (LE)': 9,
+    'Unknown error (CE)': 10,
+    'SVC call (dHE)': 11,
+    'Freeze error (FF)': 13,
+    'Unknown error (dCE)': 14,
+    'EEPROM error (EE)': 15,
+    'Sliding Lid Open error (LOE)': 16,
+    'Unknown error (PS)': 19,
+    'Door open error (DE1)': 20,
+    'Door open error (dE2)': 21,
+    'Vibration sensor error (VS)': 23,
+    'Power failure error (PF)': [35, 12],
+    'Unknown error (sud)': 41,
+    'Unknown error (Ed1)': 43,
+    'Unknown error (Ed2)': 44,
+    'Unknown error (Ed3)': 45,
+    'Unknown error (Ed4)': 46,
+    'Unknown error (Ed5)': 47,
+})
 
 // Course code -> name. The modelJson names the courses but assigns no numeric codes, so these were read off
 // the dial live against the cloud's own course field — a full sweep of every dial position (2026-09-05),
 // including the long-press Spin Only. 0xFF is the downloaded-course slot.
-const COURSE: Record<number, string> = {
-    0x00: 'None', // idle / nothing selected — the dial hasn't been read (power-on, standby)
-    0x05: 'Allergiene',
-    0x0d: 'Bedding',
-    0x16: 'Delicates',
-    0x23: 'Heavy Duty',
-    0x2e: 'Normal',
-    0x30: 'Perm. Press',
-    0x3c: 'Sanitary',
-    0x4a: 'Speed Wash',
-    0x4e: 'Spin Only',
-    0x54: 'Towels',
-    0x55: 'Tub Clean',
-    0x5a: 'Bright Whites',
-    0xff: 'Downloaded Course',
-}
+const COURSE = Enum.of({
+    'Not selected': 0x00, // idle / nothing selected — the dial hasn't been read (power-on, standby)
+    Allergiene: 0x05,
+    Bedding: 0x0d,
+    Delicates: 0x16,
+    'Heavy Duty': 0x23,
+    Normal: 0x2e,
+    'Perm Press': 0x30,
+    Sanitary: 0x3c,
+    'Speed Wash': 0x4a,
+    'Spin Only': 0x4e,
+    Towels: 0x54,
+    'Tub Clean': 0x55,
+    'Bright Whites': 0x5a,
+    Downloaded: 0xff,
+})
 
-// name -> course code, for the remote config/start command (speaks the exact codes the decoder reads).
-const COURSE_REV: Record<string, number> = Object.fromEntries(
-    Object.entries(COURSE).map(([code, name]) => [name, Number(code)]),
-)
-// The 13 dial positions offered for a remote start (excludes only 'None'). 'Downloaded Course' (0xFF) starts
+// The 13 dial positions offered for a remote start (excludes only 'Not selected'). 'Downloaded' (0xFF) starts
 // whatever is currently in the Downloaded slot — the RUN half of the specialty flow (download a SmartCourse into
 // the slot, then start it here). A bare config/start on 0xFF runs the slot's current course.
 const START_COURSE_OPTIONS = [
     'Normal',
     'Heavy Duty',
     'Towels',
-    'Perm. Press',
+    'Perm Press',
     'Delicates',
     'Bedding',
     'Bright Whites',
@@ -206,7 +235,7 @@ const START_COURSE_OPTIONS = [
     'Speed Wash',
     'Tub Clean',
     'Spin Only',
-    'Downloaded Course',
+    'Downloaded',
 ]
 const DELAY_MAX_HOURS = 19 // the app's delay-start ceiling
 
@@ -218,7 +247,7 @@ const DELAY_MAX_HOURS = 19 // the app's delay-start ceiling
 // codes confirmed by name against the machine. NOTE the code is the MACHINE's SmartCourse id, NOT the modelJson
 // numeric `id` — the two disagree (modelJson calls EconoWash id 106, but its on-wire code is 0x78 / 120).
 // Flow: pick one on the `specialty` select -> it downloads (stores that cycle in the slot); `downloaded_course`
-// then reads back which is loaded; `start_course` -> 'Downloaded Course' runs it. Download is a write, so it is
+// then reads back which is loaded; `start_course` -> 'Downloaded' runs it. Download is a write, so it is
 // gated by Remote Start like every other command (beep-and-ignore if off). The inner frames are checksum-verified:
 // re-framing each through send() reproduces the captured on-wire bytes exactly.
 const SPECIALTY_COURSES: Array<{ name: string; code: number; download: string }> = [
@@ -308,7 +337,11 @@ const SPECIALTY_COURSES: Array<{ name: string; code: number; download: string }>
         download: 'f0e5000201ff100bdd0aff0c221f10210d1e033d00200e220010003e0034003800350044007f0000',
     },
 ]
-const SMARTCOURSE: Record<number, string> = Object.fromEntries(SPECIALTY_COURSES.map((c) => [c.code, c.name])) // code -> name, for decoding the downloaded_course status byte (rec[24])
+// code <-> name, for decoding the downloaded_course status byte (rec[24]); 0x00 is an empty slot
+const SMARTCOURSE = new Enum([
+    ['Not selected', 0x00],
+    ...SPECIALTY_COURSES.map((c): [string, number] => [c.name, c.code]),
+])
 const SPECIALTY_DOWNLOAD: Record<string, string> = Object.fromEntries(
     SPECIALTY_COURSES.map((c) => [c.name, c.download]),
 ) // name -> WMDownload inner frame, for the specialty select's write
@@ -337,41 +370,49 @@ export default class Device extends AABBDevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-status',
                         state_topic: '$this/status',
+                        device_class: 'enum',
+                        options: STATE.options,
                         name: 'Status',
                         icon: 'mdi:state-machine',
                     },
-                    previous_status: {
+                    error: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-error',
+                        state_topic: '$this/error',
+                        name: 'Error',
+                        icon: 'mdi:check-circle',
+                        device_class: 'problem',
+                    },
+                    error_message: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-previous_status',
-                        state_topic: '$this/previous_status',
-                        name: 'Previous status',
-                        icon: 'mdi:history',
+                        unique_id: '$deviceid-error-message',
+                        state_topic: '$this/error_message',
+                        name: 'Error message',
+                        icon: 'mdi:alert-circle-outline',
+                        device_class: 'enum',
                         entity_category: 'diagnostic',
+                        options: ERRORS.options,
                     },
                     course: {
                         platform: 'sensor',
                         unique_id: '$deviceid-course',
                         state_topic: '$this/course',
+                        device_class: 'enum',
+                        options: COURSE.options,
                         name: 'Course',
                         icon: 'mdi:pin-outline',
-                    },
-                    course_code: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-course_code',
-                        state_topic: '$this/course_code',
-                        name: 'Course code',
-                        icon: 'mdi:pound',
-                        entity_category: 'diagnostic',
                     },
                     downloaded_course: {
                         platform: 'sensor',
                         unique_id: '$deviceid-downloaded_course',
                         state_topic: '$this/downloaded_course',
+                        device_class: 'enum',
+                        options: SMARTCOURSE.options,
                         name: 'Downloaded course',
                         icon: 'mdi:download-box-outline',
                         // Which SmartCourse is loaded in the 0xFF slot (rec[24]), decoded via SMARTCOURSE. This is the
                         // identity the app shows as "downloaded"; pairs with the `specialty` select (writes the slot)
-                        // and start_course -> 'Downloaded Course' (runs it). Rests on Small Load out of the box.
+                        // and start_course -> 'Downloaded' (runs it). Rests on Small Load out of the box.
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -402,7 +443,7 @@ export default class Device extends AABBDevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-initial_time',
                         state_topic: '$this/initial_time',
-                        name: 'Cycle time',
+                        name: 'Initial time',
                         icon: 'mdi:timer-sand',
                         device_class: 'duration',
                         unit_of_measurement: 'min',
@@ -411,6 +452,8 @@ export default class Device extends AABBDevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-soil',
                         state_topic: '$this/soil',
+                        device_class: 'enum',
+                        options: SOIL.options,
                         name: 'Soil level',
                         icon: 'mdi:liquid-spot',
                     },
@@ -418,6 +461,8 @@ export default class Device extends AABBDevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-temp',
                         state_topic: '$this/temp',
+                        device_class: 'enum',
+                        options: TEMP.options,
                         name: 'Temperature',
                         icon: 'mdi:thermometer',
                     },
@@ -542,16 +587,19 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:play-pause',
                     },
                     power_off: {
-                        platform: 'select',
+                        platform: 'button',
                         unique_id: '$deviceid-power_off',
                         command_topic: '$this/power_off/set',
-                        state_topic: '$this/power_off',
-                        options: ['unknown', 'Power Off'],
-                        name: 'Power Off',
-                        icon: 'mdi:power',
-                        // A select, not a button, so powering off is a deliberate two-step (open the dropdown, pick
-                        // 'Power Off') rather than a one-tap — the entity-level guard HA can actually offer, since it
-                        // has no button confirm. It resets to 'unknown' after firing. See setProperty for the caveat.
+                        payload_press: '',
+                        name: 'Power off',
+                        icon: 'mdi:power-off',
+                        availability: [
+                            {
+                                topic: '$this/power',
+                                payload_available: 'ON',
+                                payload_not_available: 'OFF',
+                            },
+                        ],
                     },
                     start_course: {
                         platform: 'select',
@@ -573,8 +621,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:download-box-outline',
                         // Picking a SmartCourse fires its WMDownload — storing that cycle in the 0xFF slot. It does
                         // NOT start anything: `downloaded_course` then shows it loaded, and start_course ->
-                        // 'Downloaded Course' runs it. Resets to 'unknown' after firing (see setProperty). This is the
-                        // access to LG's specialty cycles the stock integration does not give — the point of the fork.
+                        // 'Downloaded' runs it. Resets to 'unknown' after firing (see setProperty).
                     },
                     delay: {
                         platform: 'number',
@@ -596,26 +643,28 @@ export default class Device extends AABBDevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-spin',
                         state_topic: '$this/spin',
+                        device_class: 'enum',
+                        options: SPIN.options,
                         name: 'Spin',
                         icon: 'mdi:autorenew',
                     },
-                    cycles: {
+                    tub_clean_count: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-cycles',
-                        state_topic: '$this/cycles',
-                        name: 'Cycles Since Clean',
+                        unique_id: '$deviceid-tub_clean_count',
+                        state_topic: '$this/tub_clean_count',
+                        name: 'Washes since Tub Clean',
                         icon: 'mdi:counter',
-                        state_class: 'total',
                         entity_category: 'diagnostic',
                     },
                     energy: {
                         platform: 'sensor',
                         unique_id: '$deviceid-energy',
                         state_topic: '$this/energy',
-                        name: 'Course energy',
+                        name: 'Energy',
                         icon: 'mdi:lightning-bolt',
-                        state_class: 'measurement',
-                        // the cloud calls this courseSpendPower and gives it no unit; published raw
+                        device_class: 'energy',
+                        unit_of_measurement: 'Wh',
+                        state_class: 'total_increasing',
                     },
                 },
             }),
@@ -631,7 +680,7 @@ export default class Device extends AABBDevice {
         const rec = status.subarray(1)
         if (rec[0] !== RECORD_MARKER) return
         // The first 0xEC after Power carries a blank record B (only rec[4] and rec[23] set) for about a second before
-        // the real one; publishing it blips cycles/energy/downloaded_course to 0/None. Drop it.
+        // the real one; publishing it blips tub_clean_count/energy/downloaded_course to 0/None. Drop it.
         if (
             rec[RINSE_OFFSET] === 0x0e &&
             rec[PRESTATE_OFFSET] === 0x10 &&
@@ -643,25 +692,21 @@ export default class Device extends AABBDevice {
         const isOff = state === STATE_OFF
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATE[state] ?? `Unknown (${state})`)
-        this.publishProperty('previous_status', STATE[rec[PRESTATE_OFFSET]] ?? `Unknown (${rec[PRESTATE_OFFSET]})`)
-        this.publishProperty('course_code', '0x' + rec[COURSE_OFFSET].toString(16).padStart(2, '0'))
-        this.publishProperty('course', COURSE[rec[COURSE_OFFSET]] ?? 'unknown')
-        // Which SmartCourse is loaded in the 0xFF Downloaded slot (rec[24]); tracks the specialty download. 0x00 =
-        // empty slot; an unmapped code falls back to hex so a new/unknown SmartCourse is still visible, not hidden.
-        const dl = rec[DOWNLOAD_COURSE_OFFSET]
-        this.publishProperty(
-            'downloaded_course',
-            SMARTCOURSE[dl] ?? (dl === 0 ? 'None' : '0x' + dl.toString(16).padStart(2, '0')),
-        )
+        this.publishProperty('status', STATE.map(state))
+        const error = rec[ERROR_OFFSET]
+        this.publishProperty('error', error ? 'ON' : 'OFF')
+        this.publishProperty('error_message', ERRORS.map(error))
+        this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
+        // Which SmartCourse is loaded in the 0xFF Downloaded slot (rec[24]); tracks the specialty download.
+        this.publishProperty('downloaded_course', SMARTCOURSE.map(rec[DOWNLOAD_COURSE_OFFSET]))
         // Zeroed while Off: the machine keeps stale settings bytes after power-off.
         const reserve = (rec[RESERVE_HI_OFFSET] << 8) | rec[RESERVE_LO_OFFSET]
         this.publishProperty('delay_wash', reserve > 0 ? 'ON' : 'OFF')
         this.publishProperty('reserve_time', reserve)
         this.publishProperty('remaining_time', isOff ? 0 : rec.readUInt16BE(REMAIN_OFFSET))
         this.publishProperty('initial_time', isOff ? 0 : rec.readUInt16BE(INITIAL_OFFSET))
-        this.publishProperty('soil', SOIL[rec[SOIL_OFFSET]] ?? 'unknown')
-        this.publishProperty('temp', TEMP[rec[TEMP_OFFSET]] ?? 'unknown')
+        this.publishProperty('soil', SOIL.map(rec[SOIL_OFFSET]))
+        this.publishProperty('temp', TEMP.map(rec[TEMP_OFFSET]))
         // Extra rinses the user added, off rec[4] (0x0E none .. 0x11 +3), split into a flag + a 0..3 count to
         // match the sibling's shape. (rec[28] holds the TOTAL rinse count including a course's built-in rinses;
         // not published — the added count is what the panel's Extra Rinse button controls.)
@@ -674,18 +719,18 @@ export default class Device extends AABBDevice {
         this.publishProperty('steam', (rec[OPTS36_OFFSET] & OPT36_STEAM) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('rinse_spin', (rec[OPTS36_OFFSET] & OPT36_RINSE_SPIN) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('fresh_care', (rec[OPTS37_OFFSET] & OPT37_FRESH_CARE) !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('signal', (rec[SIGNAL_OFFSET] & SIGNAL_BIT) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('signal', rec[SIGNAL_OFFSET] === 0 ? 'OFF' : 'ON')
         this.publishProperty('remote_start', (rec[OPTS38_OFFSET] & OPT38_REMOTE_START) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('child_lock', (rec[OPTS38_OFFSET] & OPT38_CHILD_LOCK) !== 0 ? 'ON' : 'OFF')
         // rec[38] 0x40 = door POSITION (LG's doorClose) — decoded and understood, but deliberately NOT published:
         // the module frames only on a STATE change, never on the door itself, so a door sensor sits stale (reads
         // "open" long after the door is shut, untouched). LG monitors doorClose but its app shows no door tile, same
-        // reason. rec[38] 0x10, once mistaken for the lock, is remote start; the physical door LOCK is not in-frame.
+        // reason. The physical door LOCK is not in-frame.
         this.publishProperty('add_item', (rec[OPTS38_OFFSET] & OPT38_ADD_ITEM) !== 0 ? 'ON' : 'OFF')
         // AI DD badge (LG's AIDDLed): course-linked, mirrored from the cloud (see AIDDLED_OFFSET).
         this.publishProperty('ai_dd', (rec[AIDDLED_OFFSET] & AIDDLED_BIT) !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('spin', SPIN[rec[SPIN_OFFSET]] ?? 'unknown')
-        this.publishProperty('cycles', rec[CYCLES_OFFSET])
+        this.publishProperty('spin', SPIN.map(rec[SPIN_OFFSET]))
+        this.publishProperty('tub_clean_count', rec[TUB_CLEAN_COUNT_OFFSET])
         this.publishProperty('energy', rec[ENERGY_OFFSET])
         this.publishProperty('delay', this.delayMinutes / 60) // reflect the write-side delay setting so the number shows it
     }
@@ -708,7 +753,7 @@ export default class Device extends AABBDevice {
     //      proven with a control packet), and some temp/spin levels are disallowed per course. A correct builder
     //      must encode every course's option-availability rules — real work for marginal remote value.
     // To customize a cycle: use the machine's panel, or extend this code. The full config/start grammar and the
-    // field ids are on buildConfigStart() below; the parked builder-wip draft has HA entity scaffolding to start from.
+    // field ids are on buildConfigStart() below.
     start() {
         // connection init — makes the appliance begin streaming status frames (captured toDevice handshake)
         this.send(Buffer.from('f0ed1121010000001800', 'hex'))
@@ -727,19 +772,13 @@ export default class Device extends AABBDevice {
         else if (prop === 'resume')
             this.send(Buffer.from('f0e5000201ff0244000303', 'hex')) // resume-from-pause: a DISTINCT, longer packet than start
         else if (prop === 'power_off') {
-            // WMOff — the app's Power Off, exposed as a select: picking 'Power Off' fires, then it snaps back to
-            // 'unknown'. The dropdown IS the guard (a deliberate two-step); HA has no entity-level "Are you sure?"
-            // for a button, and LG's own integration ships an unguarded power control that strands the machine on a
-            // fat-finger. Caveat, documented not withheld: remote power-off drops the Wi-Fi module with no reliable
-            // remote wake, stranding the connection until someone walks to the machine — exactly as the app warns.
-            if (value === 'Power Off') {
-                this.send(Buffer.from('f0e5000201ff010200', 'hex'))
-                this.publishProperty('power_off', 'unknown') // reset the dropdown so it can't sit armed and is re-fireable
-            }
+            // WMOff, the app's Power Off. There is no remote power-on: the Wi-Fi module drops until the machine is
+            // powered on at the panel, as on the other washers that expose this.
+            this.send(Buffer.from('f0e5000201ff010200', 'hex'))
         } else if (prop === 'start_course') {
             // config/start: start the picked course at its defaults, folding in the current delay (course-only, per
             // scope). Like all writes, needs "Remote Start" armed or the appliance beeps and ignores it.
-            const course = COURSE_REV[value]
+            const course = COURSE.unmap(value)
             if (course !== undefined) this.send(this.buildConfigStart(course))
         } else if (prop === 'delay') {
             // hours of delay-start for the next start_course. Not sent on its own — it rides in the start blob.
@@ -750,7 +789,7 @@ export default class Device extends AABBDevice {
             // WMDownload: store the picked SmartCourse into the 0xFF Downloaded slot (the specialty-cycle write).
             // The exact captured download frame, re-checksummed by send(). Then snap back to 'unknown' so it stays
             // re-fireable and never sits looking armed — the loaded cycle is read back on `downloaded_course`, and
-            // running it is start_course -> 'Downloaded Course'. Gated by Remote Start like every write.
+            // running it is start_course -> 'Downloaded'. Gated by Remote Start like every write.
             const dl = SPECIALTY_DOWNLOAD[value]
             if (dl !== undefined) {
                 this.send(Buffer.from(dl, 'hex'))
@@ -759,7 +798,7 @@ export default class Device extends AABBDevice {
         }
         // Out of scope (grammar known, not built): the full per-field cycle builder (temp/soil/spin/rinse/pre-wash/
         // cold/steam/freshCare/delay overrides — see buildConfigStart); and power ON (WMWakeup, moot after a remote
-        // off). WMDownload IS built now — the `specialty` select, one captured frame per SmartCourse.
+        // off).
     }
 
     // Build the config/start command for a course at its defaults. Grammar reverse-engineered + confirmed against

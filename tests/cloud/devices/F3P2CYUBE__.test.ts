@@ -20,12 +20,12 @@ const EB_RECONNECT_OFF = buf(
 
 // Off, idle. Cycle counter 0x3B (59) persists across power-off — HA's cycle sensor read 59 all along.
 // NOTE: in standby the machine alternates frames between state 0x00 (Off, previous 0x01) and state 0x01
-// (Initial, previous 0x00) about once a minute; this fixture is one of the 0x00 frames.
+// (Standby, previous 0x00) about once a minute; this fixture is one of the 0x00 frames.
 const OFF_IDLE = buf(
     'aa6020ec002b0000000e0000000000000000000000000000000000010069000000003b0400000000000000400000000000002b0000000e0000000000000000000001000000000000000169000000003b04000000000000004000000000000ebb',
 )
 
-// Power on: state Initial (0x01), dial on the course this capture ran under (code 0x2E), settings at their
+// Power on: state Standby (0x01), dial on the course this capture ran under (code 0x2E), settings at their
 // defaults for that course — soil Normal (3), temp Warm (16), rinse Normal (14), spin High (15). The time
 // bytes show the pre-run estimate (0x2E = 46 min) in both the remaining and initial slots.
 const POWER_ON_SELECTING = buf(
@@ -119,15 +119,6 @@ const DELAY_OFF = buf(
     'aa6020ec002b0005100e1023000000000000000082008200000000010069000000011e0400000000200000400000000000002b0003100e0f2e00000000000000002e002e00000000010069000000011e04000000002000004000000100000ebb',
 )
 
-// Door cycled live: rec[38] bit 0x40 was the ONLY bit that moved (open 0x00 -> closed 0x40). device_class
-// door means payload ON = open. Matches the one cloud doorClose=OFF (open) sample reading the bit clear.
-const DOOR_OPEN = buf(
-    'aa6020ec002b0001120e104a00000000000000000f000f00000000010069070000011e0400000000200000400000000000002b0001120e104a00000000000000000f000f00000000010069070000011e040000000020000000000000000013bb',
-)
-const DOOR_CLOSED = buf(
-    'aa6020ec002b0000000e0000000000000000000000000000000000000069000000001e0400000000000000400000000000002b0005100e1023000000000000000082008200000000010069000000011e0400000000200000400000000000d9bb',
-)
-
 // Rinse+Spin subcycle toggled live (on Heavy Duty): rec[36] bit 0x20; while ON temp & soil read null (0x00).
 const RINSE_SPIN_ON = buf(
     'aa6020ec002b0000000e0f2e000000000000000016001600020000010069070000011e0400000000002000000000010000002b0000000e0f2e000000000000000016001600020000010069070000011e04000000000020000000000100009dbb',
@@ -174,7 +165,7 @@ describe('F3P2CYUBE__', () => {
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.power, 'OFF')
         assert.equal(p.status, 'Off')
-        assert.equal(p.cycles, 59)
+        assert.equal(p.tub_clean_count, 59)
         assert.equal(p.remaining_time, 0)
     })
 
@@ -186,16 +177,15 @@ describe('F3P2CYUBE__', () => {
         assert.equal(p.status, 'Off')
         assert.equal(p.remaining_time, 0)
         assert.equal(p.initial_time, 0)
-        assert.equal(p.cycles, 59)
+        assert.equal(p.tub_clean_count, 59)
     })
 
-    test('power on: Initial state with the course defaults and the pre-run estimate', () => {
+    test('power on: Standby state with the course defaults and the pre-run estimate', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', POWER_ON_SELECTING)
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Initial')
-        assert.equal(p.course_code, '0x2e')
+        assert.equal(p.status, 'Standby')
         assert.equal(p.soil, 'Normal')
         assert.equal(p.temp, 'Warm')
         assert.equal(p.extra_rinse, 'OFF')
@@ -230,15 +220,14 @@ describe('F3P2CYUBE__', () => {
         assert.equal(p.signal, 'ON')
     })
 
-    test('running: state, previous state, countdown and total', () => {
+    test('running: state, countdown and total', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', RUNNING)
         const p = ha.devices[DEVICE_ID].properties
-        assert.equal(p.status, 'Running')
-        assert.equal(p.previous_status, 'Detecting')
+        assert.equal(p.status, 'Washing')
         assert.equal(p.remaining_time, 40)
         assert.equal(p.initial_time, 40)
-        assert.equal(p.cycles, 59)
+        assert.equal(p.tub_clean_count, 59)
     })
 
     test('rinsing, labelled by the cloud: remaining minutes and course energy track bytes 15 and 19', () => {
@@ -246,7 +235,6 @@ describe('F3P2CYUBE__', () => {
         const p = ha.devices[DEVICE_ID].properties
         thinq.emit('data', RINSING_17_MIN)
         assert.equal(p.status, 'Rinsing')
-        assert.equal(p.previous_status, 'Running')
         assert.equal(p.remaining_time, 17)
         assert.equal(p.energy, 48)
         thinq.emit('data', RINSING_EXTRA_RINSE_DROPPED)
@@ -329,19 +317,18 @@ describe('F3P2CYUBE__', () => {
             0x16: 'Delicates',
             0x23: 'Heavy Duty',
             0x2e: 'Normal',
-            0x30: 'Perm. Press',
+            0x30: 'Perm Press',
             0x3c: 'Sanitary',
             0x4a: 'Speed Wash',
             0x4e: 'Spin Only',
             0x54: 'Towels',
             0x55: 'Tub Clean',
             0x5a: 'Bright Whites',
-            0xff: 'Downloaded Course',
+            0xff: 'Downloaded',
         }
         for (const [code, name] of Object.entries(expect)) {
             thinq.emit('data', mk(Number(code)))
             assert.equal(p.course, name, `course 0x${Number(code).toString(16)}`)
-            assert.equal(p.course_code, '0x' + Number(code).toString(16).padStart(2, '0'))
         }
     })
 
@@ -361,8 +348,8 @@ describe('F3P2CYUBE__', () => {
         const p = ha.devices[DEVICE_ID].properties
         thinq.emit('data', RINSE_SPIN_ON)
         assert.equal(p.rinse_spin, 'ON')
-        assert.equal(p.temp, 'None')
-        assert.equal(p.soil, 'None')
+        assert.equal(p.temp, 'Not selected')
+        assert.equal(p.soil, 'Not selected')
         assert.equal(p.steam, 'OFF') // 0x10 clear; steam and rinse+spin share rec[36], different bits
         thinq.emit('data', RINSE_SPIN_OFF)
         assert.equal(p.rinse_spin, 'OFF')
@@ -386,10 +373,10 @@ describe('F3P2CYUBE__', () => {
         assert.equal(p.extra_rinse_count, 3)
     })
 
-    test('write: the power_off dropdown emits the exact captured WMOff packet', () => {
+    test('write: the power_off button emits the exact captured WMOff packet', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
-        dev.setProperty('power_off', 'Power Off')
+        dev.setProperty('power_off', '')
         // exact cloud->device packet captured via bridge mode when Power Off was pressed in the LG app
         assert.equal(hex(thinq.outbox[0]).toLowerCase(), 'aa0df0e5000201ff010200c4bb')
     })
@@ -413,7 +400,7 @@ describe('F3P2CYUBE__', () => {
         for (const [course, want] of [
             ['Normal', 'aa12f0e5000201ff030a2e7f0000030104bb'],
             ['Heavy Duty', 'aa12f0e5000201ff030a237f0000030113bb'],
-            ['Downloaded Course', 'aa12f0e5000201ff030aff7f0000030177bb'], // 0xFF = run the Downloaded slot
+            ['Downloaded', 'aa12f0e5000201ff030aff7f0000030177bb'], // 0xFF = run the Downloaded slot
         ] as const) {
             thinq.resetRecorder()
             dev.setProperty('start_course', course)
@@ -502,8 +489,8 @@ describe('F3P2CYUBE__', () => {
             0x70: 'Denim',
             0x6a: 'Overnight',
             0xdd: 'Hand Wash/Wool',
-            0x00: 'None', // empty slot
-            0xab: '0xab', // unmapped code falls back to hex, never hidden
+            0x00: 'Not selected', // empty slot
+            0xab: 'None', // unmapped code: published as undefined, which goes out as 'None'
         }
         for (const [code, name] of Object.entries(expect)) {
             thinq.emit('data', mk(Number(code)))
@@ -522,26 +509,47 @@ describe('F3P2CYUBE__', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', frame)
         const p = ha.devices[DEVICE_ID].properties
-        assert.equal(p.status, 'Running')
+        assert.equal(p.status, 'Washing')
         assert.equal(p.remaining_time, 286)
         assert.equal(p.initial_time, 286)
     })
 
     test('the blank record B the module sends right after Power is dropped, not published', () => {
         // First 0xEC after pressing Power: record B is all zero except rec[4] (0x0e) and rec[23] (0x10) for about a
-        // second. Publishing it would blip cycles/energy/downloaded_course to 0/None (seen on an HBA).
+        // second. Publishing it would blip tub_clean_count/energy/downloaded_course to 0/None (seen on an HBA).
         const { ha, thinq } = makeDevice()
         thinq.emit('data', RUNNING)
         const p = ha.devices[DEVICE_ID].properties
-        assert.equal(p.cycles, 59)
+        assert.equal(p.tub_clean_count, 59)
         const frame = Buffer.from(RUNNING)
         const recB = 50
         frame.fill(0, recB + 1, recB + 44)
         frame[recB + 4] = 0x0e
         frame[recB + 23] = 0x10
         thinq.emit('data', frame)
-        assert.equal(p.cycles, 59)
-        assert.equal(p.status, 'Running')
+        assert.equal(p.tub_clean_count, 59)
+        assert.equal(p.status, 'Washing')
         assert.equal(p.downloaded_course, ha.devices[DEVICE_ID].properties.downloaded_course)
+    })
+
+    test('error: rec[20] decodes to the error flag and message', () => {
+        const { ha, thinq } = makeDevice()
+        const p = ha.devices[DEVICE_ID].properties
+        thinq.emit('data', RUNNING)
+        assert.equal(p.error, 'OFF')
+        assert.equal(p.error_message, 'OK')
+        // The checksum is not verified on receive, so the patched frames need no fix-up.
+        const recB = 50
+        for (const [code, label] of [
+            [20, 'Door open error (DE1)'],
+            [12, 'Power failure error (PF)'], // ERROR_PFE, an alias of ERROR_PF (35)
+            [35, 'Power failure error (PF)'],
+        ] as const) {
+            const frame = Buffer.from(RUNNING)
+            frame[recB + 20] = code
+            thinq.emit('data', frame)
+            assert.equal(p.error, 'ON')
+            assert.equal(p.error_message, label)
+        }
     })
 })

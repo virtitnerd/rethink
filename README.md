@@ -83,6 +83,7 @@ the second one is the model it is sold as.
 | F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F3P2CYUBE\_\_                                    | WM4000HWA, Front-Load Washing Machine            | 👍 full local control        |
 | F3P2CYVAT\_\_                                    | WM3600HWA Front-Load Washing Machine             | 🫤 preliminary support       |
+| F3P2CYUBE\_\_                                    | WM4000HWA, Front-Load Washing Machine            | 👍 full local control        |
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
 | F3L2CYV5W_WIFI                                   | WM3700HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
 | F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working            |
