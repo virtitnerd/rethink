@@ -6,6 +6,8 @@ import { type Metadata } from '../thinq'
 import { Enum } from '@/util/enum'
 import { FAN_MODES, MODES, SWING_H_MODES, SWING_MODES } from './RAC_056905_WW'
 import T1Device from './t1_device'
+export const platform = 'thinq1'
+export const modelId = 'RAC_056905_WW'
 
 type Status = Record<string, string>
 

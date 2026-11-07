@@ -5,6 +5,8 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { packStatus, Status, TemperatureUnit, unpackStatus } from './fridge_common'
+export const platform = 'thinq2'
+export const aliases = ['2RES1VE61NFWA']
 
 const STATUS_LENGTH = 12
 

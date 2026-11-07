@@ -13,6 +13,7 @@ import {
     APPLIANCE_STATES,
     unpackStatus,
 } from './dishwasher_common'
+export const platform = 'thinq2'
 
 // LG LDNPQ445S dishwasher, reporting modelName "N17" (deviceType 204, BEKEN_BK7234).
 //

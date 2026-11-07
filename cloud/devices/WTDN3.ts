@@ -6,6 +6,7 @@ import { Metadata } from '../thinq'
 import { ERRORS, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
 import { Enum } from '@/util/enum'
 import T1Device from './t1_device'
+export const platform = 'thinq1'
 
 // copied from the former shared washer_common table, to be validated.
 export const STATUS = Enum.of({
