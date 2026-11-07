@@ -2,7 +2,7 @@ import { WebSocketExpress, ExtendedWebSocket } from 'websocket-express'
 
 import path from 'path'
 import { fileURLToPath } from 'url'
-import log from '@/util/logging'
+import log, { onLog } from '@/util/logging'
 import { revision } from '@/util/version'
 
 import HA_bridge from '@/cloud/ha_bridge'
@@ -13,6 +13,7 @@ import { Device as T1Device } from '@/cloud/thinq1/device'
 import { Device as T2Device } from '@/cloud/thinq2/device'
 import { MessageBody, statusMessage } from '@/cloud/thinq1/rti'
 import { ClipPayload, rxPacket, txPacket } from '@/cloud/thinq2/clip'
+import { decodePacket } from '@/util/packet-codec'
 
 // refresh bridged device names policy:
 // - only if a websocket subscriber is connected
@@ -273,8 +274,16 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             // The monitor's clients (html/monitor.js, tools/) expect:
             // - rx: the binary payload as hex
             // - tx: ThinQ1 - the message body as a JSON string; ThinQ2 - the binary payload as hex
-            const sendPayload = (payload: object) => {
-                safeSend(ws, JSON.stringify({ type: 'packet', ...payload, injected: injectFlag }))
+            // Framed TLV/AABB payloads also carry their decoded fields; anything unrecognized is sent as hex only.
+            const decodedFields = (hex: string | undefined) => {
+                if (!hex || !/^[0-9a-f]+$/i.test(hex)) return undefined
+                const decoded = decodePacket(hex)
+                return decoded.protocol === 'unknown' ? undefined : decoded
+            }
+
+            const sendPayload = (payload: { rx?: string; tx?: string; type?: string }) => {
+                const decoded = decodedFields(payload.rx ?? payload.tx)
+                safeSend(ws, JSON.stringify({ type: 'packet', ...payload, injected: injectFlag, decoded }))
             }
 
             const onDeviceRxT1 = ({ Format, Data }: MessageBody) => {
@@ -393,6 +402,46 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         }, next)
     })
 
+    // activity log - opt-in, topic-filterable feed of log() calls, for the management panel's
+    // live activity view. Unlike /device (always-on for the whole session), a client only
+    // starts receiving anything the moment it connects here and stops the instant it
+    // disconnects - nothing is broadcast to /ws by default, since an actively-bridged device
+    // can log several lines a second and most connected clients aren't watching for it.
+    const logMonitors = new Map<ExtendedWebSocket, () => void>()
+    app.ws('/logs', (req, res, next) => {
+        res.accept().then((ws) => {
+            if (shuttingDown) {
+                closeQuietly(ws)
+                return
+            }
+
+            // ?topics=HTTPS,bridge restricts the feed; omitted means everything.
+            const topicsParam = req.query?.topics
+            const topics =
+                typeof topicsParam === 'string' && topicsParam.length > 0
+                    ? new Set(
+                          topicsParam
+                              .split(',')
+                              .map((t) => t.trim())
+                              .filter(Boolean),
+                      )
+                    : undefined
+
+            const unsubscribe = onLog((ts, topic, args) => {
+                if (topics && !topics.has(topic)) return
+                safeSend(ws, JSON.stringify({ ts, topic, text: formatLogArgs(args) }))
+            })
+
+            const cleanup = () => {
+                if (!logMonitors.delete(ws)) return
+                unsubscribe()
+            }
+            logMonitors.set(ws, cleanup)
+            ws.once('close', cleanup)
+            ws.once('error', cleanup)
+        }, next)
+    })
+
     // static pages
     app.use(WebSocketExpress.static(currentDir + '/../html', { extensions: ['html'] }))
     const server = app.createServer()
@@ -409,6 +458,11 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         }
         deviceMonitors.clear()
         lastSubscriberDisconnected()
+        for (const [monitor, cleanup] of logMonitors) {
+            cleanup()
+            closeQuietly(monitor)
+        }
+        logMonitors.clear()
     }
 
     const close = server.close.bind(server)
@@ -418,6 +472,19 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     }) as typeof server.close
     server.once('close', dispose)
     return server
+}
+
+function formatLogArgs(args: unknown[]): string {
+    return args
+        .map((a) => {
+            if (typeof a === 'string') return a
+            try {
+                return JSON.stringify(a)
+            } catch {
+                return String(a)
+            }
+        })
+        .join(' ')
 }
 
 function asyncHandler(handler: (req: Request, res: Response) => Promise<any>) {
