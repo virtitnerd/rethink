@@ -7,7 +7,7 @@ import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
 export const platform = 'thinq2'
 // RC90V9_WW: LG RC91V9EV2Q heat pump dryer, same records.
-export const aliases = ['RC90V9_WW', 'RC90V9_AUS']
+export const aliases = ['RC90V9_WW', 'RC90V9_AUS', 'RH90V9_WW']
 
 // LG RC9DN9029 (ThinQ Model ID RC90U2_WW, deviceType 202): 9 kg DUAL Inverter heat pump dryer with
 // Eco Hybrid, EU/Nordic market. ThinQ2 with the QCOM_QCA4010 module (clip_hna_v1.9.230, protocolVer
@@ -98,6 +98,8 @@ export const COURSES = Enum.of({
     'Cool Air': 0x0d,
     'Warm Air': 0x0e,
     'Allergy Care': 0x10,
+    'Cotton+': 0x19, // RH90V9_WW
+    'Tub Clean': 0x13, // RH90V9_WW, the Drum Care button
     // downloaded ("smart") courses
     'Baby Wear': 0x65,
     'Gym Clothes': 0x66,
