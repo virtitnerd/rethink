@@ -1,10 +1,5 @@
-import HADevice from './base'
-import { Device as Thinq2Device } from '../thinq2/device'
-import { type Connection } from '../homeassistant'
-import { type Metadata } from '../thinq'
-import { allowExtendedType } from '@/util/casting'
-import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import Base from './RV13B6BSD_D_US_WIFI'
 export const platform = 'thinq2'
 
 // LG electric dryer — matched on modelId "RV13B6ES_D_US_WIFI". Frame layout is identical to its close
@@ -26,74 +21,42 @@ export const platform = 'thinq2'
 // matching timestamps — not guessed from static analysis. The course/dry-level/temperature tables were
 // derived mechanically from those pairings rather than copied.
 
-// One status block is a leading byte + the 28B record; 0xEB carries one block, 0xEC two (old, current).
-const STATUS_LENGTH = 29
-
 // Status query, sent on every connect. 0xF0ED is the family-wide "report your state" request —
 // the fridges, the EU washers and the US WashTower all use it; actuating commands are 0xF0E5,
 // so this only ever reads. Confirmed on a live RV13B6ES: the dryer answered within a second
 // with a 0xEB snapshot, then resumed normal 0xEC updates.
 const STATUS_REQUEST = 'F0ED1121010000001800'
 
-// Offsets below are relative to the record's own 0x1b marker (rec[0]).
-const PHASE_OFFSET = 1
-// rec[2:4] = [hour][minute]: the live countdown while running, or the estimated cycle time while
-// Initial/Selecting. Confirmed against the cloud's remainTimeHour/Minute, including the hour rollover
-// (Antibacterial reported 1h10m and decoded as 70 minutes).
-const TIME_HOUR_OFFSET = 2
-const TIME_MIN_OFFSET = 3
-// rec[4:6] = [hour][minute]: a genuine separate initial-time estimate that stays fixed once a cycle is
-// running while rec[2:4] counts down — confirmed against the cloud's initialTimeHour/Minute.
-const INITIAL_TIME_HOUR_OFFSET = 4
-const INITIAL_TIME_MIN_OFFSET = 5
-const COURSE_OFFSET = 6
-const DRY_LEVEL_OFFSET = 8
-const TEMP_OFFSET = 9
 // rec[11]: the Signal (end-of-cycle beeper) setting. This one is NOT cloud-confirmed like everything else
 // in this file — the LG cloud sends no signal field for this dryer at all (verified against a full
 // allDeviceInfoUpdate snapshot). It was mapped from the wire alone: pressing Signal cycles the byte
 // 0x00 -> 0x01 -> 0x04 -> 0x00 with nothing else in the record moving, and the three values were tied to
 // the panel's own Off/Low/High indicator by reading the lit LED after each press.
 const SIGNAL_OFFSET = 11
+
 // rec[12]: the More/Less Time adjustment, a SIGNED byte holding the number of minutes added to or
 // removed from the course's default time. Confirmed against the cloud's moreLessTime (which reports the
 // same byte unsigned) across a Speed Dry trimmed from its 25-minute default down to 10:
 // 0xfe/-2 -> 23 min, 0xf9/-7 -> 18, 0xf6/-10 -> 15, 0xf1/-15 -> 10. Every value matched 25 + offset.
 const MORE_LESS_TIME_OFFSET = 12
-// rec[15]: options bitfield, each bit isolated via a single-variable toggle against the cloud's enum.
-// The 0x40 "base" bit is present while the panel is awake and clears on panel idle timeout and while
-// actively drying — it is not part of any single option, so it is not exposed as its own entity.
-const FLAGS_OFFSET = 15
-const FLAG_CHILD_LOCK = 0x01
-const FLAG_REDUCE_STATIC = 0x02
-const FLAG_DAMP_DRY_SIGNAL = 0x08
+
 // Confirmed across six clean on/off transitions, matching the cloud's wrinkleCare exactly, observed both
 // with and without the 0x40 base bit present. This is the offset that differs from RV13B6BSD_D_US_WIFI.
 const FLAG_WRINKLE_CARE = 0x10
-// rec[16]: a separate options bitfield from rec[15].
-const OPT2_OFFSET = 16
+
 // Remote Start. RV13B6BSD_D_US_WIFI documents this as not findable in any device frame ("appears
 // cloud-side only"); on this model it is rec[16] bit 0x01, isolated cleanly when the bit flipped in a
 // frame that changed nothing else and the cloud reported remoteStart:"REMOTE_START_ON" 300ms later.
 const OPT2_REMOTE_START = 0x01
-const OPT2_ENERGY_SAVER = 0x02
-const OPT2_TURBO_STEAM = 0x04
+
 // rec[23]: literal count of "load items", matching the cloud's loadItem (LOADITEM_OFF/2/5 seen as
 // 0x00/0x02/0x05). Not decoded by RV13B6BSD_D_US_WIFI.
 const LOAD_ITEM_OFFSET = 23
 
-const PHASE_OFF = 0x00
-
-// Phase/status byte. Every value below was observed directly on this appliance across a full Speed Dry
-// run and cross-checked against the cloud's own state field (POWEROFF / INITIAL / PAUSE / DRYING /
-// COOLING / END). Anything outside this table falls back to 'Running' rather than being reported wrongly.
-const STATUS = Enum.of({
+const SIGNAL = Enum.of({
     Off: 0x00,
-    Initial: 0x01,
-    Pause: 0x03,
-    Drying: 0x32,
-    Cooling: 0x33,
-    End: 0x04,
+    Low: 0x01,
+    High: 0x04,
 })
 
 // Course identifier -> name, derived from the capture by pairing rec[6] with the cloud's
@@ -116,227 +79,61 @@ const COURSE = Enum.of({
     'Super Dry': 0x1a,
 })
 
-// Dry level 1-5, confirmed by single-step toggling against the cloud's dryLevel enum. 0 (NO_DRYLEVEL)
-// is used by courses that do not auto-sense dryness (Speed Dry, Air Dry, Steam Fresh, Time Dry) and
-// is left undecoded below, so the entity reads unknown.
-const DRY_LEVEL = Enum.of({
-    Damp: 1,
-    Less: 2,
-    Normal: 3,
-    More: 4,
-    Very: 5,
-})
+export default class Device extends Base {
+    protected override readonly course: Pick<typeof COURSE, 'map'> = COURSE
 
-// Temp 1-5, confirmed the same way against the cloud's temp enum. 0 (NO_TEMP) is used by courses with
-// no heating element (Air Dry) and is left undecoded below, so the entity reads unknown.
-const TEMP = Enum.of({
-    'Ultra Low': 1,
-    Low: 2,
-    Medium: 3,
-    'Mid High': 4,
-    High: 5,
-})
-
-// Signal (beeper) volume. Panel-confirmed rather than cloud-confirmed — see SIGNAL_OFFSET.
-const SIGNAL = Enum.of({
-    Off: 0x00,
-    Low: 0x01,
-    High: 0x04,
-})
-
-export default class Device extends AABBDevice {
-    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
-        this.setConfig(
-            allowExtendedType({
-                ...HADevice.config(meta, { name: 'LG Dryer' }),
-                components: {
-                    power: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-power',
-                        state_topic: '$this/power',
-                        name: 'Power',
-                        icon: 'mdi:tumble-dryer',
-                        device_class: 'running',
-                    },
-                    status: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-status',
-                        state_topic: '$this/status',
-                        name: 'Status',
-                        icon: 'mdi:state-machine',
-                        // free-text (NOT device_class:enum): unmapped phase codes emit 'Running'.
-                    },
-                    course: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-course',
-                        state_topic: '$this/course',
-                        name: 'Course',
-                        icon: 'mdi:pin-outline',
-                    },
-                    remaining_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-remaining_time',
-                        state_topic: '$this/remaining_time',
-                        name: 'Remaining time',
-                        icon: 'mdi:timer-outline',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                    },
-                    initial_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-initial_time',
-                        state_topic: '$this/initial_time',
-                        name: 'Initial time estimate',
-                        icon: 'mdi:clock-outline',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                        entity_category: 'diagnostic',
-                    },
-                    dry_level: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-dry_level',
-                        state_topic: '$this/dry_level',
-                        name: 'Dry level',
-                        icon: 'mdi:water-percent',
-                    },
-                    temp: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-temp',
-                        state_topic: '$this/temp',
-                        name: 'Temperature',
-                        icon: 'mdi:thermometer',
-                    },
-                    more_less_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-more_less_time',
-                        state_topic: '$this/more_less_time',
-                        name: 'More/Less time',
-                        icon: 'mdi:plus-minus-variant',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                        entity_category: 'diagnostic',
-                    },
-                    remote_start: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-remote_start',
-                        state_topic: '$this/remote_start',
-                        name: 'Remote start',
-                        icon: 'mdi:cellphone-wireless',
-                        entity_category: 'diagnostic',
-                    },
-                    load_item: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-load_item',
-                        state_topic: '$this/load_item',
-                        name: 'Load items',
-                        icon: 'mdi:tshirt-crew-outline',
-                        state_class: 'measurement',
-                    },
-                    signal: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-signal',
-                        state_topic: '$this/signal',
-                        name: 'Signal',
-                        icon: 'mdi:bell-outline',
-                        entity_category: 'diagnostic',
-                    },
-                    reduce_static: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-reduce_static',
-                        state_topic: '$this/reduce_static',
-                        name: 'Reduce static',
-                        icon: 'mdi:flash-off-outline',
-                    },
-                    damp_dry_signal: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-damp_dry_signal',
-                        state_topic: '$this/damp_dry_signal',
-                        name: 'Damp Dry Signal',
-                        icon: 'mdi:water-alert-outline',
-                    },
-                    child_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-child_lock',
-                        state_topic: '$this/child_lock',
-                        name: 'Child lock',
-                        icon: 'mdi:lock',
-                        entity_category: 'diagnostic',
-                    },
-                    energy_saver: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-energy_saver',
-                        state_topic: '$this/energy_saver',
-                        name: 'Energy Saver',
-                        icon: 'mdi:leaf',
-                    },
-                    turbo_steam: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-turbo_steam',
-                        state_topic: '$this/turbo_steam',
-                        name: 'Turbo Steam',
-                        icon: 'mdi:kettle-steam',
-                    },
-                    wrinkle_care: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-wrinkle_care',
-                        state_topic: '$this/wrinkle_care',
-                        name: 'Wrinkle Care',
-                        icon: 'mdi:tshirt-crew-outline',
-                    },
-                },
-            }),
-        )
+    protected override components() {
+        return {
+            ...super.components(),
+            more_less_time: {
+                platform: 'sensor',
+                unique_id: '$deviceid-more_less_time',
+                state_topic: '$this/more_less_time',
+                name: 'More/Less time',
+                icon: 'mdi:plus-minus-variant',
+                device_class: 'duration',
+                unit_of_measurement: 'min',
+                entity_category: 'diagnostic',
+            },
+            remote_start: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-remote_start',
+                state_topic: '$this/remote_start',
+                name: 'Remote start',
+                icon: 'mdi:cellphone-wireless',
+                entity_category: 'diagnostic',
+            },
+            load_item: {
+                platform: 'sensor',
+                unique_id: '$deviceid-load_item',
+                state_topic: '$this/load_item',
+                name: 'Load items',
+                icon: 'mdi:tshirt-crew-outline',
+                state_class: 'measurement',
+            },
+            signal: {
+                platform: 'sensor',
+                unique_id: '$deviceid-signal',
+                state_topic: '$this/signal',
+                name: 'Signal',
+                icon: 'mdi:bell-outline',
+                entity_category: 'diagnostic',
+            },
+        }
     }
 
-    // These dryers only volunteer a status frame when something changes, so a driver that never
-    // asks stays blank until the next physical interaction — and every reconnect (container
-    // restart, appliance reboot) discards the last known state, leaving Home Assistant pinned at
-    // "Off"/unknown indefinitely. Asking once per connect is what makes the entities survive a
-    // restart.
     start() {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
     }
 
-    processAABB(buf: Buffer) {
-        this.processCommonStatus(buf, 0x30, STATUS_LENGTH, this.processStatus)
-        // 0x31 (serial), 0xE2 (idle snapshot) and 0xD8/0x72 (heartbeats) are not decoded.
+    protected override publishOptions(flags: number, opt2: number) {
+        this.publishProperty('wrinkle_care', (flags & FLAG_WRINKLE_CARE) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('remote_start', (opt2 & OPT2_REMOTE_START) !== 0 ? 'ON' : 'OFF')
     }
 
-    private processStatus(status: Buffer) {
-        const rec = status.subarray(1)
-        if (rec[0] !== 0x1b) return // the current-state record should always lead with its marker
-
-        const phase = rec[PHASE_OFFSET]
-        const isOff = phase === PHASE_OFF
-
-        this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATUS.map(phase) ?? 'Running')
-        this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
-        this.publishProperty('remaining_time', isOff ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
-        this.publishProperty(
-            'initial_time',
-            isOff ? 0 : rec[INITIAL_TIME_HOUR_OFFSET] * 60 + rec[INITIAL_TIME_MIN_OFFSET],
-        )
-        this.publishProperty('dry_level', DRY_LEVEL.map(rec[DRY_LEVEL_OFFSET]))
-        this.publishProperty('temp', TEMP.map(rec[TEMP_OFFSET]))
+    protected override publishExtras(rec: Buffer, isOff: boolean) {
         this.publishProperty('load_item', rec[LOAD_ITEM_OFFSET])
         this.publishProperty('signal', SIGNAL.map(rec[SIGNAL_OFFSET]))
-        // signed: negative trims the course default, positive extends it
         this.publishProperty('more_less_time', isOff ? 0 : rec.readInt8(MORE_LESS_TIME_OFFSET))
-
-        const flags = rec[FLAGS_OFFSET]
-        this.publishProperty('child_lock', (flags & FLAG_CHILD_LOCK) !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('reduce_static', (flags & FLAG_REDUCE_STATIC) !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('damp_dry_signal', (flags & FLAG_DAMP_DRY_SIGNAL) !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('wrinkle_care', (flags & FLAG_WRINKLE_CARE) !== 0 ? 'ON' : 'OFF')
-
-        const opt2 = rec[OPT2_OFFSET]
-        this.publishProperty('energy_saver', (opt2 & OPT2_ENERGY_SAVER) !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('turbo_steam', (opt2 & OPT2_TURBO_STEAM) !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('remote_start', (opt2 & OPT2_REMOTE_START) !== 0 ? 'ON' : 'OFF')
-        // not yet located (declared entities intentionally omitted rather than published wrong): error
-        // codes and a door sensor. Opening the door mid-cycle produces the same generic Pause phase a
-        // button press would, with no distinguishing byte found.
     }
 }
