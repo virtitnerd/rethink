@@ -974,7 +974,7 @@ describe('WashTower official control frame', () => {
             return thinq.outbox
         }
 
-        assert.equal(attempt(Washer, WASHER_MODEL, 46, 'temp', 6).length, 0) // NORMAL + 95 ℃
+        assert.equal(attempt(Washer, WASHER_MODEL, 46, 'temp', 6).length, 0) // NORMAL + 95 °C
         assert.equal(attempt(Washer, WASHER_MODEL, 27, 'spin', 8).length, 0) // DUVET + 1200 rpm
         assert.equal(attempt(Washer, WASHER_MODEL, 85, 'turboWash', 1).length, 0) // TUB_CLEAN override
         assert.equal(attempt(Dryer, DRYER_MODEL, 44, 'dryLevel', 4).length, 0) // AI dry level
